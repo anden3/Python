@@ -11,8 +11,8 @@ p1_score = [0]
 p2_score = [0]
 
 
-def print_board(board):
-    for x in board:
+def print_board():
+    for x in board1:
         print(" ".join(x))
 
 
@@ -59,45 +59,41 @@ def ship_placer(time, board):
         if board == board1:
             ship_placer(1, board2)
         else:
-            player_control(1, board2)
+            player_control()
 
 
-def player_control(player, board):
+def player_control():
     winning()
     print("P1 Score: " + str(p1_score[0]))
     print("P2 Score: " + str(p2_score[0]))
-    if player == 1:
-        print_board(board1)
-    elif player == 2:
-        print_board(board2)
-    print("Player " + str(player))
+    print_board()
     x = int(input("X: "))
     y = int(input("Y: "))
     if x > 9 or y > 9 or x < 0 or y < 0:
-        player_control(player, board)
-    if board[x][y] == "<" or board[x][y] == "=" or board[x][y] == ">" or board[x][y] == "A" or board[x][y] == "I" or board[x][y] == "V":
-        if player == 1:
-            p1_score[0] += 1
-            board2[x][y] = "X"
-            player_control(2, board1)
-        elif player == 2:
-            p2_score[0] += 1
-            board1[x][y] = "X"
-            player_control(1, board2)
-    elif board[x][y] == "_":
-        if player == 1:
-            board1[x][y] = "O"
-            player_control(2, board1)
-        elif player == 2:
-            board2[x][y] = "O"
-            player_control(1, board2)
-    elif board[x][y] == "X":
+        print("Invalid input, please try again")
+        player_control()
+    if board2[x][y] == "<" or board2[x][y] == "=" or board2[x][y] == ">" or board2[x][y] == "A" or board2[x][y] == "I" or board2[x][y] == "V":
+        p1_score[0] += 1
+        board2[x][y] = "X"
+    elif board2[x][y] == "_":
+        board1[x][y] = "O"
+    elif board2[x][y] == "X" or board1[x][y] == "O":
         print("Already fired there, please try again")
-        player_control(player, board)
-    else:
-        if player == 1:
-            player_control(2, board1)
-        elif player == 2:
-            player_control(1, board2)
+        player_control()
+    ai()
+
+
+def ai():
+    x = math.floor(random.randint(0, 9))
+    y = math.floor(random.randint(0, 9))
+    if board1[x][y] == "<" or board1[x][y] == "=" or board1[x][y] == ">" or board1[x][y] == "A" or board1[x][y] == "I" or board1[x][y] == "V":
+        p2_score[0] += 1
+        board1[x][y] = "X"
+    elif board1[x][y] == "_":
+        board2[x][y] = "O"
+    elif board1[x][y] == "X" or board2[x][y] == "O":
+        ai()
+    player_control()
+
 
 ship_placer(1, board1)
