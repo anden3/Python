@@ -7,9 +7,6 @@ sys.setrecursionlimit(100000)
 board1 = [["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"]]
 board2 = [["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"], ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_"]]
 
-p1_score = [0]
-p2_score = [0]
-
 
 def print_board():
     for x in board1:
@@ -17,11 +14,19 @@ def print_board():
 
 
 def winning():
-    if p1_score[0] >= 5:
-        print("Player 1 has won!")
+    p1_gameover = True
+    p2_gameover = True
+    for x in board1:
+        if "<" in x or "=" in x or ">" in x or "A" in x or "I" in x or "V" in x:
+            p1_gameover = False
+    for x in board2:
+        if "<" in x or "=" in x or ">" in x or "A" in x or "I" in x or "V" in x:
+            p2_gameover = False
+    if p1_gameover:
+        print("AI has won!")
         sys.exit()
-    elif p2_score[0] >= 5:
-        print("Player 2 has won!")
+    if p2_gameover:
+        print("Player has won!")
         sys.exit()
 
 
@@ -64,8 +69,6 @@ def ship_placer(time, board):
 
 def player_control():
     winning()
-    print("P1 Score: " + str(p1_score[0]))
-    print("P2 Score: " + str(p2_score[0]))
     print_board()
     x = int(input("X: "))
     y = int(input("Y: "))
@@ -73,8 +76,8 @@ def player_control():
         print("Invalid input, please try again")
         player_control()
     if board2[x][y] == "<" or board2[x][y] == "=" or board2[x][y] == ">" or board2[x][y] == "A" or board2[x][y] == "I" or board2[x][y] == "V":
-        p1_score[0] += 1
         board2[x][y] = "X"
+        board1[x][y] = "#"
     elif board2[x][y] == "_":
         board1[x][y] = "O"
     elif board2[x][y] == "X" or board1[x][y] == "O":
@@ -87,10 +90,10 @@ def ai():
     x = math.floor(random.randint(0, 9))
     y = math.floor(random.randint(0, 9))
     if board1[x][y] == "<" or board1[x][y] == "=" or board1[x][y] == ">" or board1[x][y] == "A" or board1[x][y] == "I" or board1[x][y] == "V":
-        p2_score[0] += 1
         board1[x][y] = "X"
     elif board1[x][y] == "_":
         board2[x][y] = "O"
+        #board1[x][y] = "¤"
     elif board1[x][y] == "X" or board2[x][y] == "O":
         ai()
     player_control()
