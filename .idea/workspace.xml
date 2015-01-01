@@ -7,23 +7,10 @@
     <bookmark url="file://$PROJECT_DIR$/Matte/1c Diagnos Del 3 20.py" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b315aad9-42e9-4ba9-80cb-ad7d8a838623" name="Default" comment="Started with curses">
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Misc/Factorial.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Misc/Prime_palindrome.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 1.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 11.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 14.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 15.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 2.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 22.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 3.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 6.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Misc/is_prime.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/names.txt" />
-      <change type="DELETED" beforePath="C:\Users\Andre\PycharmProjects\Python\Python" afterPath="" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Misc/Palindrome.py" afterPath="$PROJECT_DIR$/Misc/Palindrome.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Misc/Primes.py" afterPath="$PROJECT_DIR$/Misc/Primes.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Project Euler/Problem 4.py" afterPath="$PROJECT_DIR$/Project Euler/Problem 4.py" />
+    <list default="true" id="b315aad9-42e9-4ba9-80cb-ad7d8a838623" name="Default" comment="Done a few PE-problems and redone a few.">
+      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Misc/Divisors.py" />
+      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 21.py" />
+      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 23.py" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
     </list>
     <ignored path="Matte.iws" />
@@ -46,18 +33,7 @@
     <favorites_list name="Matte" />
   </component>
   <component name="FileEditorManager">
-    <leaf>
-      <file leaf-file-name="Problem 4.py" pinned="false" current="true" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/Project Euler/Problem 4.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="581">
-              <caret line="0" column="105" selection-start-line="0" selection-start-column="105" selection-end-line="0" selection-end-column="105" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-    </leaf>
+    <leaf />
   </component>
   <component name="FindManager">
     <FindUsagesManager>
@@ -118,6 +94,9 @@
         <option value="$PROJECT_DIR$/Misc/Prime_palindrome.py" />
         <option value="$PROJECT_DIR$/Project Euler/Problem 6.py" />
         <option value="$PROJECT_DIR$/Project Euler/Problem 4.py" />
+        <option value="$PROJECT_DIR$/Project Euler/Problem 21.py" />
+        <option value="$PROJECT_DIR$/Misc/Divisors.py" />
+        <option value="$PROJECT_DIR$/Project Euler/Problem 23.py" />
       </list>
     </option>
   </component>
@@ -243,43 +222,7 @@
       <recent name="C:\Users\andrevennberg\PycharmProjects\Matte\Matte" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.Problem 4">
-    <configuration default="false" name="Problem 1" type="PythonConfigurationType" factoryName="Python" temporary="true">
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/Project Euler" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <module name="Content" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Project Euler/Problem 1.py" />
-      <option name="PARAMETERS" value="" />
-      <RunnerSettings RunnerId="PythonRunner" />
-      <ConfigurationWrapper RunnerId="PythonRunner" />
-      <method />
-    </configuration>
-    <configuration default="false" name="Problem 2" type="PythonConfigurationType" factoryName="Python" temporary="true">
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/Project Euler" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <module name="Content" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Project Euler/Problem 2.py" />
-      <option name="PARAMETERS" value="" />
-      <RunnerSettings RunnerId="PythonRunner" />
-      <ConfigurationWrapper RunnerId="PythonRunner" />
-      <method />
-    </configuration>
+  <component name="RunManager" selected="Python.Problem 23">
     <configuration default="false" name="Problem 3" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -329,6 +272,42 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <module name="Content" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Project Euler/Problem 4.py" />
+      <option name="PARAMETERS" value="" />
+      <RunnerSettings RunnerId="PythonRunner" />
+      <ConfigurationWrapper RunnerId="PythonRunner" />
+      <method />
+    </configuration>
+    <configuration default="false" name="Problem 21" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/Project Euler" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <module name="Content" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Project Euler/Problem 21.py" />
+      <option name="PARAMETERS" value="" />
+      <RunnerSettings RunnerId="PythonRunner" />
+      <ConfigurationWrapper RunnerId="PythonRunner" />
+      <method />
+    </configuration>
+    <configuration default="false" name="Problem 23" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/Project Euler" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <module name="Content" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Project Euler/Problem 23.py" />
       <option name="PARAMETERS" value="" />
       <RunnerSettings RunnerId="PythonRunner" />
       <ConfigurationWrapper RunnerId="PythonRunner" />
@@ -456,19 +435,19 @@
       <method />
     </configuration>
     <list size="5">
-      <item index="0" class="java.lang.String" itemvalue="Python.Problem 1" />
-      <item index="1" class="java.lang.String" itemvalue="Python.Problem 2" />
-      <item index="2" class="java.lang.String" itemvalue="Python.Problem 3" />
-      <item index="3" class="java.lang.String" itemvalue="Python.Problem 6" />
-      <item index="4" class="java.lang.String" itemvalue="Python.Problem 4" />
+      <item index="0" class="java.lang.String" itemvalue="Python.Problem 3" />
+      <item index="1" class="java.lang.String" itemvalue="Python.Problem 6" />
+      <item index="2" class="java.lang.String" itemvalue="Python.Problem 4" />
+      <item index="3" class="java.lang.String" itemvalue="Python.Problem 21" />
+      <item index="4" class="java.lang.String" itemvalue="Python.Problem 23" />
     </list>
     <recent_temporary>
       <list size="5">
-        <item index="0" class="java.lang.String" itemvalue="Python.Problem 4" />
-        <item index="1" class="java.lang.String" itemvalue="Python.Problem 6" />
-        <item index="2" class="java.lang.String" itemvalue="Python.Problem 3" />
-        <item index="3" class="java.lang.String" itemvalue="Python.Problem 2" />
-        <item index="4" class="java.lang.String" itemvalue="Python.Problem 1" />
+        <item index="0" class="java.lang.String" itemvalue="Python.Problem 23" />
+        <item index="1" class="java.lang.String" itemvalue="Python.Problem 21" />
+        <item index="2" class="java.lang.String" itemvalue="Python.Problem 4" />
+        <item index="3" class="java.lang.String" itemvalue="Python.Problem 6" />
+        <item index="4" class="java.lang.String" itemvalue="Python.Problem 3" />
       </list>
     </recent_temporary>
   </component>
@@ -514,28 +493,33 @@
       <created>1420071026179</created>
       <updated>1420071026179</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="Done a few PE-problems and redone a few.">
+      <created>1420136638563</created>
+      <updated>1420136638563</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="ToolWindowManager">
     <frame x="-5" y="-5" width="1930" height="1050" extended-state="6" />
     <editor active="false" />
     <layout>
+      <window_info id="Messages" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.32947367" sideWeight="0.5" order="10" side_tool="false" content_ui="tabs" />
       <window_info id="Changes" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.32913387" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="11" side_tool="false" content_ui="tabs" />
       <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="6" side_tool="false" content_ui="tabs" />
       <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.32947367" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.25372022" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
-      <window_info id="Project" active="true" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" weight="0.2421875" sideWeight="0.4986945" order="0" side_tool="false" content_ui="combo" />
+      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" weight="0.2421875" sideWeight="0.4986945" order="0" side_tool="false" content_ui="combo" />
       <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.4" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.24304539" sideWeight="0.50130546" order="2" side_tool="true" content_ui="tabs" />
-      <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.3568421" sideWeight="0.5" order="8" side_tool="true" content_ui="tabs" />
-      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" weight="0.36" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.35473683" sideWeight="0.5" order="8" side_tool="true" content_ui="tabs" />
+      <window_info id="Run" active="true" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" weight="0.36" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Thumbnails" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.32947367" sideWeight="0.5" order="-1" side_tool="false" content_ui="tabs" />
       <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="9" side_tool="false" content_ui="tabs" />
       <window_info id="Cvs" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.25" sideWeight="0.5" order="4" side_tool="false" content_ui="tabs" />
       <window_info id="Message" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Ant Build" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
-      <window_info id="Messages" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.32947367" sideWeight="0.5" order="10" side_tool="false" content_ui="tabs" />
       <window_info id="Commander" active="false" anchor="right" auto_hide="false" internal_type="SLIDING" type="SLIDING" visible="false" weight="0.4" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Inspection" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.4" sideWeight="0.5" order="5" side_tool="false" content_ui="tabs" />
       <window_info id="Hierarchy" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.25" sideWeight="0.5" order="2" side_tool="false" content_ui="combo" />
@@ -564,7 +548,8 @@
     <MESSAGE value="Begun Tkinter stuff" />
     <MESSAGE value="Misc problems" />
     <MESSAGE value="Started with curses" />
-    <option name="LAST_COMMIT_MESSAGE" value="Started with curses" />
+    <MESSAGE value="Done a few PE-problems and redone a few." />
+    <option name="LAST_COMMIT_MESSAGE" value="Done a few PE-problems and redone a few." />
     <option name="OPTIMIZE_IMPORTS_BEFORE_PROJECT_COMMIT" value="true" />
   </component>
   <component name="XDebuggerManager">
@@ -576,20 +561,6 @@
     </breakpoint-manager>
   </component>
   <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/Games/Battleship.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0" vertical-offset="119" max-vertical-offset="1785">
-          <caret line="7" column="31" selection-start-line="7" selection-start-column="31" selection-end-line="7" selection-end-column="31" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 30.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="340">
-          <caret line="14" column="19" selection-start-line="14" selection-start-column="19" selection-end-line="14" selection-end-column="19" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/Games/2048.py">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0" vertical-offset="765" max-vertical-offset="1003">
@@ -943,8 +914,32 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/Project Euler/Problem 4.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="581">
+        <state vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="923">
           <caret line="0" column="105" selection-start-line="0" selection-start-column="105" selection-end-line="0" selection-end-column="105" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Misc/Divisors.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.029259896" vertical-offset="0" max-vertical-offset="581">
+          <caret line="1" column="58" selection-start-line="1" selection-start-column="58" selection-end-line="1" selection-end-column="58" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 21.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.08777969" vertical-offset="0" max-vertical-offset="581">
+          <caret line="3" column="87" selection-start-line="3" selection-start-column="87" selection-end-line="3" selection-end-column="87" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 23.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.14629948" vertical-offset="0" max-vertical-offset="581">
+          <caret line="5" column="75" selection-start-line="5" selection-start-column="75" selection-end-line="5" selection-end-column="75" />
           <folding />
         </state>
       </provider>
