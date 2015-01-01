@@ -1,4 +1,4 @@
-def palin(x):
-    return x.casefold() == x[::-1].casefold()
+def palin(n):
+    return str(n).casefold() == str(n)[::-1].casefold()
 
-print(palin(""))
+print(palin(800))
