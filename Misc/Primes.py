@@ -1,8 +1,14 @@
+from math import sqrt
+
+
 def prime(n):
-    for y in range(2, n + 1):
+    for x in range(2, n + 1):
         p = True
-        for x in range(2, y):
-            if y % x == 0:
-                p = False
+        for y in range(2, int(sqrt(x) + 1)):
+                if x % y == 0:
+                    p = False
+                    break
         if p:
-            print(y)
+            print(x)
+
+prime(1000000)

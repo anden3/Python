@@ -1,8 +1,11 @@
+from math import sqrt
+
+
 def prime(n):
     lst = []
     for y in range(2, n + 1):
         p = True
-        for x in range(2, y):
+        for x in range(2, int(sqrt(y))):
             if y % x == 0:
                 p = False
         if p:

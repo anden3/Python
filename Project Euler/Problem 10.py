@@ -1,10 +1,12 @@
-import math
+from math import sqrt
 
 
 def is_prime(n):
-    if n % 2 == 0 and n > 2:
-        return False
-    return all(n % i for i in range(3, int(math.sqrt(n)) + 1, 2))
+    p = True
+    for x in range(2, int(sqrt(n) + 1)):
+        if n % x == 0:
+            p = False
+    return p
 
 
 def prob():
