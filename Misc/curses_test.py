@@ -54,6 +54,6 @@ def main(stdscr):
 
     curses.wrapper(main)
 
-make_board(66)
+make_board(20)
 
 curses.wrapper(main)

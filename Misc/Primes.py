@@ -11,4 +11,4 @@ def prime(n):
         if p:
             print(x)
 
-prime(10000000)
+prime(100000)
