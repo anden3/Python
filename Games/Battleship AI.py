@@ -31,10 +31,10 @@ def winning():
 
 
 def ship_placer(time, board):
-    length = math.floor(random.randint(2, 6))
-    x = math.floor(random.randint(0, 9))
-    y = math.floor(random.randint(0, 9))
-    direction = math.floor(random.randint(0, 1))
+    length = int(math.floor(random.randint(2, 6)))
+    x = int(math.floor(random.randint(0, 9)))
+    y = int(math.floor(random.randint(0, 9)))
+    direction = int(math.floor(random.randint(0, 1)))
     while time < 6:
         if direction == 0:
             if x + length > 9:
@@ -87,13 +87,12 @@ def player_control():
 
 
 def ai():
-    x = math.floor(random.randint(0, 9))
-    y = math.floor(random.randint(0, 9))
+    x = int(math.floor(random.randint(0, 9)))
+    y = int(math.floor(random.randint(0, 9)))
     if board1[x][y] == "<" or board1[x][y] == "=" or board1[x][y] == ">" or board1[x][y] == "A" or board1[x][y] == "I" or board1[x][y] == "V":
         board1[x][y] = "X"
     elif board1[x][y] == "_":
         board2[x][y] = "O"
-        #board1[x][y] = "¤"
     elif board1[x][y] == "X" or board2[x][y] == "O":
         ai()
     player_control()
