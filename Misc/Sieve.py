@@ -1,14 +1,5 @@
-primes = [2]
+from functools import reduce
 
 
-def prime(n):
-    for x in range(2, n + 1):
-        p = True
-        for y in primes:
-            if x % y == 0:
-                p = False
-        if p:
-            primes.append(x)
-    print(primes)
-
-prime(100000)
+def sieve(limit):
+    return reduce(lambda x, y: x - y, (set(range(x**2, limit, x)) for x in range(2, int(limit ** 0.5) + 1)), set(range(2, limit)))
