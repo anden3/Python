@@ -9,18 +9,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b315aad9-42e9-4ba9-80cb-ad7d8a838623" name="Default" comment="Done loads of problems (:">
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 32.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 38.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 39.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 41.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 42 - Coded triangle numbers.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 43 - Sub-string divisibility.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 44 - Pentagon numbers.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 45 Triangular, pentagonal, and hexagonal.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 46.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/words.txt" />
+      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 46 - Goldbach's other conjecture.py" />
+      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 47 - Distinct primes factors.py" />
+      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Project Euler/Problem 49 - Prime permutations.py" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Project Euler/Problem 37.py" afterPath="$PROJECT_DIR$/Project Euler/Problem 37.py" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Project Euler/Problem 39.py" afterPath="$PROJECT_DIR$/Project Euler/Problem 39.py" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/Project Euler/Problem 45 Triangular, pentagonal, and hexagonal.py" afterPath="$PROJECT_DIR$/Project Euler/Problem 45 - Triangular, pentagonal, and hexagonal.py" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/Project Euler/Problem 46.py" afterPath="$PROJECT_DIR$/Project Euler/Problem 50 - Consecutive prime sum.py" />
     </list>
     <ignored path="Matte.iws" />
     <ignored path=".idea/workspace.xml" />
@@ -42,22 +37,14 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file leaf-file-name="Problem 39.py" pinned="false" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/Project Euler/Problem 39.py">
+      <file leaf-file-name="Problem 50 - Consecutive prime sum.py" pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/Project Euler/Problem 50 - Consecutive prime sum.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.37037036">
-              <caret line="20" column="12" selection-start-line="20" selection-start-column="12" selection-end-line="20" selection-end-column="12" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="Problem 46.py" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/Project Euler/Problem 46.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.0">
-              <caret line="4" column="130" selection-start-line="4" selection-start-column="130" selection-end-line="4" selection-end-column="130" />
-              <folding />
+            <state vertical-scroll-proportion="0.5882353">
+              <caret line="38" column="31" selection-start-line="38" selection-start-column="31" selection-end-line="38" selection-end-column="31" />
+              <folding>
+                <element signature="e#0#28#0" expanded="true" />
+              </folding>
             </state>
           </provider>
         </entry>
@@ -88,11 +75,9 @@
         <option value="$PROJECT_DIR$/Project Euler/Problem 26.py" />
         <option value="$PROJECT_DIR$/Project Euler/Problem 31.py" />
         <option value="$PROJECT_DIR$/Misc/is_prime.py" />
-        <option value="$PROJECT_DIR$/Misc/Sieve.py" />
         <option value="$PROJECT_DIR$/Project Euler/Problem 35.py" />
         <option value="$PROJECT_DIR$/Project Euler/Problem 37.py" />
         <option value="$PROJECT_DIR$/Project Euler/Problem 38.py" />
-        <option value="$PROJECT_DIR$/Project Euler/Problem 39.py" />
         <option value="$PROJECT_DIR$/Project Euler/Problem 32.py" />
         <option value="$PROJECT_DIR$/Problem 41.py" />
         <option value="$PROJECT_DIR$/Misc/Problem 42 - Coded triangle numbers.py" />
@@ -102,7 +87,15 @@
         <option value="$PROJECT_DIR$/Project Euler/Problem 44 - Pentagon numbers.py" />
         <option value="$PROJECT_DIR$/Project Euler/Problem 45.py" />
         <option value="$PROJECT_DIR$/Project Euler/Problem 45 Triangular, pentagonal, and hexagonal.py" />
+        <option value="$PROJECT_DIR$/Project Euler/Problem 39.py" />
         <option value="$PROJECT_DIR$/Project Euler/Problem 46.py" />
+        <option value="$PROJECT_DIR$/Project Euler/Problem 47.py" />
+        <option value="$PROJECT_DIR$/Project Euler/Problem 47 - Distinct primes factors.py" />
+        <option value="$PROJECT_DIR$/Project Euler/Problem 49.py" />
+        <option value="$PROJECT_DIR$/Project Euler/Problem 49 - Prime permutations.py" />
+        <option value="$PROJECT_DIR$/Misc/Sieve.py" />
+        <option value="$PROJECT_DIR$/Project Euler/Problem 50.py" />
+        <option value="$PROJECT_DIR$/Project Euler/Problem 50 - Consecutive prime sum.py" />
       </list>
     </option>
   </component>
@@ -237,26 +230,8 @@
       <recent name="C:\Users\andrevennberg\PycharmProjects\Matte\Matte" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.Problem 45 Triangular, pentagonal, and hexagonal">
-    <configuration default="false" name="Problem 41" type="PythonConfigurationType" factoryName="Python" temporary="true">
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <module name="Content" />
-      <EXTENSION ID="PythonCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="G:\Documents\PycharmProjects\Python\Project Euler\Problem 41.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <method />
-    </configuration>
-    <configuration default="false" name="Problem 42 - Coded triangle numbers" type="PythonConfigurationType" factoryName="Python" temporary="true">
+  <component name="RunManager" selected="Python.Problem 50 - Consecutive prime sum">
+    <configuration default="false" name="Problem 46" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
       <envs>
@@ -269,12 +244,12 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <module name="Content" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Project Euler/Problem 42 - Coded triangle numbers.py" />
+      <option name="SCRIPT_NAME" value="G:\Documents\PycharmProjects\Python\Project Euler\Problem 46 - Goldbach's other conjecture.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <method />
     </configuration>
-    <configuration default="false" name="Problem 43 - Sub-string divisibility" type="PythonConfigurationType" factoryName="Python" temporary="true">
+    <configuration default="false" name="Problem 47" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
       <envs>
@@ -287,12 +262,12 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <module name="Content" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Project Euler/Problem 43 - Sub-string divisibility.py" />
+      <option name="SCRIPT_NAME" value="G:\Documents\PycharmProjects\Python\Project Euler\Problem 47 - Distinct primes factors.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <method />
     </configuration>
-    <configuration default="false" name="Problem 44 - Pentagon numbers" type="PythonConfigurationType" factoryName="Python" temporary="true">
+    <configuration default="false" name="Problem 47 - Distinct primes factors" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
       <envs>
@@ -305,12 +280,12 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <module name="Content" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Project Euler/Problem 44 - Pentagon numbers.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Project Euler/Problem 47 - Distinct primes factors.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <method />
     </configuration>
-    <configuration default="false" name="Problem 45 Triangular, pentagonal, and hexagonal" type="PythonConfigurationType" factoryName="Python" temporary="true">
+    <configuration default="false" name="Problem 49 - Prime permutations" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
       <envs>
@@ -323,7 +298,25 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <module name="Content" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Project Euler/Problem 45 Triangular, pentagonal, and hexagonal.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Project Euler/Problem 49 - Prime permutations.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <method />
+    </configuration>
+    <configuration default="false" name="Problem 50 - Consecutive prime sum" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/Project Euler" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <module name="Content" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Project Euler/Problem 50 - Consecutive prime sum.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <method />
@@ -457,19 +450,19 @@
       <method />
     </configuration>
     <list size="5">
-      <item index="0" class="java.lang.String" itemvalue="Python.Problem 41" />
-      <item index="1" class="java.lang.String" itemvalue="Python.Problem 42 - Coded triangle numbers" />
-      <item index="2" class="java.lang.String" itemvalue="Python.Problem 43 - Sub-string divisibility" />
-      <item index="3" class="java.lang.String" itemvalue="Python.Problem 44 - Pentagon numbers" />
-      <item index="4" class="java.lang.String" itemvalue="Python.Problem 45 Triangular, pentagonal, and hexagonal" />
+      <item index="0" class="java.lang.String" itemvalue="Python.Problem 46" />
+      <item index="1" class="java.lang.String" itemvalue="Python.Problem 47" />
+      <item index="2" class="java.lang.String" itemvalue="Python.Problem 47 - Distinct primes factors" />
+      <item index="3" class="java.lang.String" itemvalue="Python.Problem 49 - Prime permutations" />
+      <item index="4" class="java.lang.String" itemvalue="Python.Problem 50 - Consecutive prime sum" />
     </list>
     <recent_temporary>
       <list size="5">
-        <item index="0" class="java.lang.String" itemvalue="Python.Problem 45 Triangular, pentagonal, and hexagonal" />
-        <item index="1" class="java.lang.String" itemvalue="Python.Problem 44 - Pentagon numbers" />
-        <item index="2" class="java.lang.String" itemvalue="Python.Problem 43 - Sub-string divisibility" />
-        <item index="3" class="java.lang.String" itemvalue="Python.Problem 42 - Coded triangle numbers" />
-        <item index="4" class="java.lang.String" itemvalue="Python.Problem 41" />
+        <item index="0" class="java.lang.String" itemvalue="Python.Problem 50 - Consecutive prime sum" />
+        <item index="1" class="java.lang.String" itemvalue="Python.Problem 49 - Prime permutations" />
+        <item index="2" class="java.lang.String" itemvalue="Python.Problem 47 - Distinct primes factors" />
+        <item index="3" class="java.lang.String" itemvalue="Python.Problem 47" />
+        <item index="4" class="java.lang.String" itemvalue="Python.Problem 46" />
       </list>
     </recent_temporary>
   </component>
@@ -562,7 +555,13 @@
       <option name="project" value="LOCAL" />
       <updated>1448729858256</updated>
     </task>
-    <option name="localTasksCounter" value="14" />
+    <task id="LOCAL-00014" summary="Done loads of problems (:">
+      <created>1448820718814</created>
+      <option name="number" value="00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1448820718815</updated>
+    </task>
+    <option name="localTasksCounter" value="15" />
     <servers />
   </component>
   <component name="TodoView" selected-index="0">
@@ -596,7 +595,7 @@
       <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32769555" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Python Console" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="9" side_tool="false" content_ui="tabs" />
       <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="9" side_tool="false" content_ui="tabs" />
-      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.35940802" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.35940802" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25372022" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3297414" sideWeight="0.5" order="11" side_tool="false" content_ui="tabs" />
       <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.24304539" sideWeight="0.50130546" order="2" side_tool="true" content_ui="tabs" />
@@ -672,27 +671,6 @@
     <watches-manager />
   </component>
   <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/Misc/Palindrome.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.08777969">
-          <caret line="3" column="17" selection-start-line="3" selection-start-column="17" selection-end-line="3" selection-end-column="17" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 2.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.11703958">
-          <caret line="4" column="11" selection-start-line="4" selection-start-column="11" selection-end-line="4" selection-end-column="11" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 1.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="0" column="64" selection-start-line="0" selection-start-column="64" selection-end-line="0" selection-end-column="64" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/Project Euler/Problem 6.py">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.029259896">
@@ -917,23 +895,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 35.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="18" column="38" selection-start-line="18" selection-start-column="38" selection-end-line="18" selection-end-column="38" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 37.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="28" column="27" selection-start-line="28" selection-start-column="27" selection-end-line="28" selection-end-column="27" />
-          <folding>
-            <element signature="e#0#28#0" expanded="false" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$APPLICATION_HOME_DIR$/helpers/pydev/_pydev_imps/_pydev_execfile.py">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.3148148">
@@ -946,14 +907,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="31" selection-end-column="35" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/Misc/is_prime.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="11" selection-end-column="15" />
           <folding />
         </state>
       </provider>
@@ -974,14 +927,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 38.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.4117647">
-          <caret line="18" column="42" selection-start-line="18" selection-start-column="42" selection-end-line="18" selection-end-column="42" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/Project Euler/Problem 42 - Coded triangle numbers.py">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.5294118">
@@ -990,21 +935,11 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 41.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="22" column="17" selection-start-line="22" selection-start-column="17" selection-end-line="22" selection-end-column="17" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/Project Euler/Problem 43 - Sub-string divisibility.py">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
           <caret line="8" column="66" selection-start-line="8" selection-start-column="66" selection-end-line="8" selection-end-column="66" />
-          <folding>
-            <element signature="e#0#16#0" expanded="true" />
-          </folding>
+          <folding />
         </state>
       </provider>
     </entry>
@@ -1016,7 +951,7 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 45 Triangular, pentagonal, and hexagonal.py">
+    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 45 - Triangular, pentagonal, and hexagonal.py">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
           <caret line="15" column="51" selection-start-line="15" selection-start-column="51" selection-end-line="15" selection-end-column="51" />
@@ -1024,27 +959,99 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/Misc/Sieve.py">
+    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 46 - Goldbach's other conjecture.py">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
-          <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="4" selection-end-column="130" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 46.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="4" column="130" selection-start-line="4" selection-start-column="130" selection-end-line="4" selection-end-column="130" />
-          <folding />
+          <caret line="24" column="24" selection-start-line="24" selection-start-column="24" selection-end-line="24" selection-end-column="24" />
+          <folding>
+            <element signature="e#0#28#0" expanded="false" />
+          </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/Project Euler/Problem 39.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.37037036">
-          <caret line="20" column="12" selection-start-line="20" selection-start-column="12" selection-end-line="20" selection-end-column="12" />
+        <state vertical-scroll-proportion="0.20588236">
+          <caret line="7" column="27" selection-start-line="7" selection-start-column="27" selection-end-line="7" selection-end-column="27" />
           <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 35.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-0.029411765">
+          <caret line="18" column="38" selection-start-line="18" selection-start-column="38" selection-end-line="18" selection-end-column="38" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 47 - Distinct primes factors.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="37" column="21" selection-start-line="37" selection-start-column="21" selection-end-line="37" selection-end-column="21" />
+          <folding>
+            <element signature="e#0#28#0" expanded="false" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 38.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.5294118">
+          <caret line="18" column="42" selection-start-line="18" selection-start-column="42" selection-end-line="18" selection-end-column="42" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 37.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.61764705">
+          <caret line="28" column="27" selection-start-line="28" selection-start-column="27" selection-end-line="28" selection-end-column="27" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Misc/is_prime.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="11" selection-end-column="15" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Misc/Sieve.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.14705883">
+          <caret line="5" column="0" selection-start-line="5" selection-start-column="0" selection-end-line="5" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 41.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.11764706">
+          <caret line="22" column="17" selection-start-line="22" selection-start-column="17" selection-end-line="22" selection-end-column="17" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 49 - Prime permutations.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="4" column="0" selection-start-line="4" selection-start-column="0" selection-end-line="15" selection-end-column="15" />
+          <folding>
+            <element signature="e#0#34#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Project Euler/Problem 50 - Consecutive prime sum.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.5882353">
+          <caret line="38" column="31" selection-start-line="38" selection-start-column="31" selection-end-line="38" selection-end-column="31" />
+          <folding>
+            <element signature="e#0#28#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>

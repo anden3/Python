@@ -6,8 +6,8 @@ def get_sides():
     result = 0
 
     for a in range(1, 999):
-        for b in range(1, b + a < 1000):
-            for c in range(1, c + b + a < 10001):
+        for b in range(1, 1000 - a):
+            for c in range(1, 10001 - b - a):
                 if a * a + b * b == c * c:
                     p[a + b + c] += 1
 
