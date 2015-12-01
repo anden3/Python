@@ -26,7 +26,7 @@ prime_list = sorted(list(sieve(3932)))
 
 
 def prime_sum(lst):
-    len_prime = len(lst)
+    len_prime = len(lst),
     sum_prime = sum(lst)
 
     if sum_prime < 1000000:
