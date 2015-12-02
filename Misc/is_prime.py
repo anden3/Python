@@ -1,12 +1,12 @@
-from math import sqrt
-
-
-def is_prime(n):
-    p = True
-    for x in range(2, int(sqrt(n) + 1)):
+def isprime(n):
+    n = abs(int(n))
+    if n < 2:
+        return False
+    if n == 2:
+        return True
+    if not n & 1:
+        return False
+    for x in range(3, int(n**0.5) + 1, 2):
         if n % x == 0:
-            p = False
-            break
-    return p
-
-print(is_prime(336790031231))
+            return False
+    return True
