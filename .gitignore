@@ -68,14 +68,14 @@ build/
 *.tlb
 *.tli
 *.tlh
-*.tmp
+#*.tmp
 *.tmp_proj
 *.log
 *.vspscc
 *.vssscc
 .builds
 *.pidb
-*.log
+#*.log
 *.scc
 
 # Visual C++ cache files
@@ -193,9 +193,10 @@ $RECYCLE.BIN/
 *.egg
 *.egg-info
 dist/
-build/
+#build/
 eggs/
 parts/
+/Misc/Reddit Saved Downloader.py
 var/
 sdist/
 develop-eggs/
@@ -215,4 +216,8 @@ pip-log.txt
 .mr.developer.cfg
 
 ## PyCharm
+/Misc/saved.html
 .idea/
+/.idea/Content.iml
+/.idea/misc.xml
+/.idea/workspace.xml

@@ -21,12 +21,54 @@ color_names = {
     's': 'black'
 }
 
+ansi_text_color = {
+    's': '30',
+    'r': '31',
+    'g': '32',
+    'y': '33',
+    'b': '34',
+    'p': '35',
+    'c': '36',
+    'w': '37',
+
+    0: '37'
+}
+
+ansi_text_style = {
+    'bold': '1',
+    'under': '4',
+    'blink': '5',
+    'inverse': '7',
+    'hidden': '8',
+
+    0: '0'
+}
+
+ansi_background_color = {
+    's': '40',
+    'r': '41',
+    'g': '42',
+    'y': '43',
+    'b': '44',
+    'p': '45',
+    'c': '46',
+    'w': '47',
+
+    0: '0'
+}
+
 vowels = ['a', 'e', 'i', 'o', 'u']
 
 batteries = None
 serial_number = None
 last_digit_odd = None
 has_parallel = None
+
+
+def format_text(text, text_color, text_style, background_color):
+    parameters = ';'.join(['\033[', ansi_text_color[text_color], ansi_text_style[text_style], ansi_background_color[background_color], 'm'])
+
+    return parameters + str(text) + '\033[0m'
 
 
 def get_occurrences(c, s):
@@ -169,9 +211,9 @@ def button():
 
 def button_strip():
     print("Hold the button down. Check the color of the strip to the right of the button.")
-    print("If the strip is blue, release when there's a 4 in the countdown timer.")
-    print("If the strip is yellow, release when there's a 5 in the countdown timer.")
-    print("If the strip is any other color, release when there's a 1 in the countdown timer.")
+    print("If the strip is " + format_text('blue', 'b', 0, 0) + ", release when there's a " + format_text('4', 'r', 0, 0) + " in the countdown timer.")
+    print("If the strip is " + format_text('yellow', 'y', 0, 0) + ", release when there's a " + format_text('5', 'r', 0, 0) + " in the countdown timer.")
+    print("If the strip is any other color, release when there's a " + format_text('1', 'r', 0, 0) + " in the countdown timer.")
 
     module()
 
@@ -198,12 +240,14 @@ def simon_says():
         if colors != "":
             colors += " + "
 
-        colors += color_names[replace_chars[input("What new color is flashing?: ")]].capitalize()
+        new_color = input("What new color is flashing?: ").lower()
+
+        if new_color == "x":
+            module()
+
+        colors += format_text(color_names[replace_chars[new_color]], replace_chars[new_color], 0, 0).capitalize()
 
         print("Press " + colors + ".")
-
-        if input("Is the module disarmed?: ").lower()[0:1] == "y":
-            module()
 
 
 def correct_word():
@@ -445,8 +489,8 @@ def complicated_wires():
     wire_count = int(input("How many wires are there?: "))
 
     for wire in range(wire_count):
-        wire_red = input("Is the wire red?: ").lower()[0:1] == "y"
-        wire_blue = input("Is the wire blue?: ").lower()[0:1] == "y"
+        wire_red = input("Is the wire " + format_text("red", "r", 0, 0) + "?: ").lower()[0:1] == "y"
+        wire_blue = input("Is the wire " + format_text("blue", "b", 0, 0) + "?: ").lower()[0:1] == "y"
 
         wire_symbol = input("Is there a star symbol underneath the wire?: ").lower()[0:1] == "y"
         wire_led = input("Is the LED above the wire lit?: ").lower()[0:1] == "y"
@@ -541,9 +585,12 @@ def wire_sequences():
             wire_color = input("What's the color of the next wire?: ").lower()
 
         if wire_color == "x":
-            return
+            module()
 
         wire_target = input("Where does the wire lead to?: ").lower()
+
+        if wire_target == "x":
+            module()
 
         if wire_color == "red" or wire_color == "r":
             if wire_target in red_occurences[red_wires]:
@@ -726,24 +773,24 @@ def maze():
         '51': maze_9
     }
 
-    mark = ''.join(input("What's the row and column of one of the green circles?: ").split())
+    mark = ''.join(input("What's the row and column of one of the " + format_text("green", "g", 0, 0) + " circles?: ").split())
     if mark not in mazes:
         print("Invalid position, please try again")
         maze()
 
     active_maze = mazes[mark]
 
-    player_pos = [int(c) for c in input("What's the row and column of the white square?: ").split()]
+    player_pos = [int(c) for c in input("What's the row and column of the " + format_text("white", "w", 0, 0) + " square?: ").split()]
 
     while player_pos[0] < 1 or player_pos[0] > 6 or player_pos[1] < 1 or player_pos[1] > 6:
         print("Invalid position given, please try again.")
-        player_pos = [int(c) for c in input("What's the row and column of the white square?: ").split()]
+        player_pos = [int(c) for c in input("What's the row and column of the " + format_text("white", "w", 0, 0) + " square?: ").split()]
 
-    target_pos = [int(c) for c in input("What's the row and column of the red triangle?: ").split()]
+    target_pos = [int(c) for c in input("What's the row and column of the " + format_text("red", "r", 0, 0) + " triangle?: ").split()]
 
     while target_pos[0] < 1 or target_pos[0] > 6 or target_pos[1] < 1 or target_pos[1] > 6:
         print("Invalid position given, please try again.")
-        target_pos = [int(c) for c in input("What's the row and column of the red triangle?: ").split()]
+        target_pos = [int(c) for c in input("What's the row and column of the " + format_text("red", "r", 0, 0) + " triangle?: ").split()]
 
     active_maze[target_pos[0] * 2 - 2][target_pos[1] * 2 - 2] = 2
 
