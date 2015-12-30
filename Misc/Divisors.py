@@ -1,7 +1,20 @@
-from math import sqrt
+from time import time
 
 
 def div(n):
-    return [x for x in range(2, int(sqrt(n)) + 1) if n % x == 0]
+    count = 2
+    i = 2
 
-print(div(358482142))
+    while i ** 2 < n:
+        if n % i == 0:
+            count += 2
+        i += 1
+
+    count += (1 if i ** 2 == n else 0)
+    return count
+
+t1 = time()
+print(div(981273921))
+t2 = time()
+
+print(str((t2 - t1) * 1000) + "ms")

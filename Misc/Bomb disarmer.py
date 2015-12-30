@@ -276,6 +276,9 @@ def correct_word():
         for word in label_list[search_word]:
             if input("Is the word " + word + " in the list?: ").lower()[0:1] == "y":
                 print("Click it.")
+                break
+
+    module()
 
 
 def memory():
@@ -288,7 +291,7 @@ def memory():
 
         print("Click " + str(s1_vals[0]) + " at the " + positions[s1_vals[1]] + " position.")
     else:
-        s1_vals.append(int(input("What number is at the second position?: ")))
+        s1_vals.append(int(input("What number is at the " + positions[first_value] + " position?: ")))
         s1_vals.append(first_value)
 
         print("Click " + str(s1_vals[0]) + " at the " + positions[s1_vals[1]] + " position.")
@@ -531,11 +534,14 @@ def wire_sequences():
     blue_wires = 0
     black_wires = 0
 
-    for x in range(4):
+    for x in range(100):
         if x == 0:
             wire_color = input("What's the color of the first wire on the left?: ").lower()
         else:
             wire_color = input("What's the color of the next wire?: ").lower()
+
+        if wire_color == "x":
+            return
 
         wire_target = input("Where does the wire lead to?: ").lower()
 
@@ -721,10 +727,23 @@ def maze():
     }
 
     mark = ''.join(input("What's the row and column of one of the green circles?: ").split())
+    if mark not in mazes:
+        print("Invalid position, please try again")
+        maze()
+
     active_maze = mazes[mark]
 
     player_pos = [int(c) for c in input("What's the row and column of the white square?: ").split()]
+
+    while player_pos[0] < 1 or player_pos[0] > 6 or player_pos[1] < 1 or player_pos[1] > 6:
+        print("Invalid position given, please try again.")
+        player_pos = [int(c) for c in input("What's the row and column of the white square?: ").split()]
+
     target_pos = [int(c) for c in input("What's the row and column of the red triangle?: ").split()]
+
+    while target_pos[0] < 1 or target_pos[0] > 6 or target_pos[1] < 1 or target_pos[1] > 6:
+        print("Invalid position given, please try again.")
+        target_pos = [int(c) for c in input("What's the row and column of the red triangle?: ").split()]
 
     active_maze[target_pos[0] * 2 - 2][target_pos[1] * 2 - 2] = 2
 
@@ -845,6 +864,9 @@ def module():
 
     if command == "exit":
         return
+    elif command not in modules:
+        print("Invalid command, please try again.")
+        module()
     else:
         return modules[command.lower()]()
 
