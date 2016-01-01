@@ -15,4 +15,4 @@ def rule_90(steps, current_row):
         current_row = next_step(current_row)
         print(''.join(str(n) for n in current_row).replace("0", " ").replace("1", "#"))
 
-rule_90(10, [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+rule_90(10, [])
