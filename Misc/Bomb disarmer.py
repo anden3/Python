@@ -64,6 +64,11 @@ serial_number = None
 last_digit_odd = None
 has_parallel = None
 
+labels = {
+    'car': None,
+    'frk': None
+}
+
 
 def format_text(text, text_color, text_style, background_color):
     parameters = ';'.join(['\033[', ansi_text_color[text_color], ansi_text_style[text_style], ansi_background_color[background_color], 'm'])
@@ -89,7 +94,10 @@ def get_batteries():
 
 
 def get_indicator(label):
-    return input("Is there a lit indicator with the label " + label.upper() + " on the bomb?: ")[0:1] == "y"
+    if labels[label] is None:
+        labels[label] = input("Is there a lit indicator with the label " + label.upper() + " on the bomb?: ")[0:1] == "y"
+
+    return labels[label]
 
 
 def get_parallel():
@@ -220,21 +228,52 @@ def button_strip():
 
 def simon_says():
     colors = ""
+    strikes = int(input("How many strikes do you have?: "))
 
     if any(vowel in get_serial(False) for vowel in vowels):
-        replace_chars = {
-            'r': 'b',
-            'b': 'r',
-            'g': 'y',
-            'y': 'g'
-        }
+        if strikes == 0:
+            replace_chars = {
+                'r': 'b',
+                'b': 'r',
+                'g': 'y',
+                'y': 'g'
+            }
+        elif strikes == 1:
+            replace_chars = {
+                'r': 'y',
+                'b': 'g',
+                'g': 'b',
+                'y': 'r'
+            }
+        else:
+            replace_chars = {
+                'r': 'g',
+                'b': 'r',
+                'g': 'y',
+                'y': 'b'
+            }
     else:
-        replace_chars = {
-            'r': 'b',
-            'b': 'y',
-            'g': 'g',
-            'y': 'r'
-        }
+        if strikes == 0:
+            replace_chars = {
+                'r': 'b',
+                'b': 'y',
+                'g': 'g',
+                'y': 'r'
+            }
+        elif strikes == 1:
+            replace_chars = {
+                'r': 'r',
+                'b': 'b',
+                'g': 'y',
+                'y': 'g'
+            }
+        else:
+            replace_chars = {
+                'r': 'y',
+                'b': 'g',
+                'g': 'b',
+                'y': 'r'
+            }
 
     while True:
         if colors != "":
@@ -478,6 +517,8 @@ def morse_code():
             matches.append(word)
 
     if len(matches) > 1:
+        print("Matching words: " + ' '.join(match.capitalize() for match in matches))
+        print("Matching frequencies: " + ' '.join(str(words[match]) for match in matches))
         print("Too many matches, please try again.")
         morse_code()
     else:
