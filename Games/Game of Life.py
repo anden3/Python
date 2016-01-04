@@ -14,7 +14,7 @@ textbox_visible = False
 width = 0
 height = 0
 scale = 0
-delay = 0
+delay = 100
 
 buttons = {}
 textboxes = {}
@@ -70,7 +70,7 @@ class Textbox:
 
 
 def new_array():
-    return [0] * (height * width)
+    return [0] * (width * height)
 
 
 def toggle_cell(x, y, state):
@@ -109,14 +109,14 @@ def cell_check(board, rescan=False):
 
             if x == 0:
                 x_vals = [width - 1, 0, 1]
-            elif x == width - 1:
+            elif x >= width - 1:
                 x_vals = [x - 1, x, 0]
             else:
                 x_vals = [x - 1, x, x + 1]
 
             if y == 0:
                 y_vals = [height - 1, 0, 1]
-            elif y == height - 1:
+            elif y >= height - 1:
                 y_vals = [y - 1, y, 0]
             else:
                 y_vals = [y - 1, y, y + 1]
@@ -125,12 +125,6 @@ def cell_check(board, rescan=False):
 
             if field_sum == 3 or (field_sum == 4 and board[i] == 1):
                 active_cells.add(i)
-            '''
-            elif field_sum != 4:
-                new_board[i] = 0
-            else:
-                new_board[i] = board[i]
-            '''
 
         return board
     else:
@@ -182,6 +176,7 @@ def cell_check(board, rescan=False):
                         active_cells.discard(index)
                     else:
                         new_board[index] = board[index]
+
         return new_board
 
 
@@ -360,8 +355,13 @@ def parse_plaintext(pattern):
 
 
 def parse_rle(pattern):
+    lines = []
+
     global width, height
-    lines = repr(pattern).split(r'\r\n')
+    if '\\r\\n' in repr(pattern):
+        lines = repr(pattern).split('\\r\\n')
+    elif '\\n' in repr(pattern):
+        lines = repr(pattern).split('\\n')
 
     x_vals = []
     y_vals = []
@@ -370,18 +370,8 @@ def parse_rle(pattern):
     cell_block_start = [i for i in range(len(lines)) if lines[i][0:1] != '#' and lines[i][0:2] != "'#"][0]
     parameters = lines[cell_block_start].split(',')
 
-    w = int(parameters[0][4:])
-    h = int(parameters[1][4:])
-
-    if w > width:
-        width = w
-    if h > height:
-        height = h
-
-    board = new_array()
-
     if len(parameters) > 2:
-        has_normal_rules = True if parameters[2][8:].lower() == 'b3/s23' else False
+        has_normal_rules = True if parameters[2][8:].lower() == 'b3/s23' or parameters[2][8:].lower() == '23/3' else False
 
         if not has_normal_rules:
             print("This program doesn't support custom rules yet")
@@ -427,16 +417,30 @@ def parse_rle(pattern):
                 x_vals.append(x)
                 y_vals.append(y)
 
-    w_padding = (width - len(set(x_vals))) // 2
-    h_padding = (height - len(set(y_vals))) // 2
+    w = int(parameters[0][4:])
+    h = int(parameters[1][4:])
 
-    if min(x_vals) < w_padding:
-        diff = (min(x_vals) * -1) + w_padding
+    if w > width:
+        width = w
+        w_padding = 0
+    else:
+        w_padding = (width - len(set(x_vals))) // 2
+
+    if h > height:
+        height = h
+        h_padding = 0
+    else:
+        h_padding = (height - len(set(y_vals))) // 2
+
+    board = new_array()
+
+    if round(median(x_vals)) < w_padding:
+        diff = round(median(x_vals) * -1) + w_padding
         for x in range(len(x_vals.copy())):
             x_vals[x] += diff
 
-    if min(y_vals) < h_padding:
-        diff = (min(y_vals) * -1) + h_padding
+    if round(median(y_vals)) < h_padding:
+        diff = round(median(y_vals) * -1) + h_padding
         for y in range(len(y_vals.copy())):
             y_vals[y] += diff
 
@@ -590,13 +594,12 @@ def game(steps, load_board=None, rescan=False):
                     draw_board()
 
 
-def start(w, h, steps, d, s):
+def start(w, h, steps, s):
     pygame.init()
 
-    global width, height, delay, scale
+    global width, height, scale
     width = w
     height = h
-    delay = d
     scale = s
 
     buttons['resume'] = Button("Resume")
@@ -613,4 +616,4 @@ def start(w, h, steps, d, s):
 
     game(steps)
 
-start(100, 100, 0, 0, 10)
+start(500, 500, 0, 2)
