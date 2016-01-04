@@ -4,7 +4,7 @@ import sys
 import pygame
 import requests
 
-from math import floor
+from math import floor, sqrt
 
 screen = None
 menu_visible = False
@@ -75,7 +75,7 @@ def new_array():
 def toggle_cell(x, y, state):
     rect = (x * scale, y * scale, scale, scale)
 
-    if state == 1:
+    if state:
         screen.fill((0, 0, 0), rect=rect)
     else:
         screen.fill((255, 255, 255), rect=rect)
@@ -479,8 +479,11 @@ def game(steps, load_board=None, rescan=False):
 
         if mouse_down:
             mouse_pos = pygame.mouse.get_pos()
+            mouse_rel = pygame.mouse.get_rel()
 
             if floor(mouse_pos[0] / scale) != floor(old_mouse_pos[0] / scale) or floor(mouse_pos[1] / scale) != floor(old_mouse_pos[1] / scale):
+                print(mouse_rel)
+                print(sqrt((mouse_rel[0] ** 2) + (mouse_rel[1] ** 2)))
                 old_mouse_pos = mouse_pos
                 click_cell(mouse_pos, board, mouse_button_down)
 
