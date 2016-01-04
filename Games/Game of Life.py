@@ -539,6 +539,38 @@ def game(steps, load_board=None, rescan=False):
                     elif event.key == 114:  # R
                         game(steps, load_board=new_array())
 
+                    elif 48 <= event.key <= 57:  # 0-9
+                        global delay
+
+                        if event.key == 48:
+                            delay = 0
+
+                        elif event.key == 49:
+                            delay = 1000
+
+                        elif event.key == 50:
+                            delay = 500
+
+                        elif event.key == 51:
+                            delay = 250
+
+                        elif event.key == 52:
+                            delay = 100
+
+                        elif event.key == 53:
+                            delay = 50
+
+                        elif event.key == 54:
+                            delay = 25
+
+                        elif event.key == 55:
+                            delay = 10
+
+                        elif event.key == 56:
+                            delay = 5
+
+                        elif event.key == 57:
+                            delay = 0
         if mouse_down:
             mouse_pos = pygame.mouse.get_pos()
 
