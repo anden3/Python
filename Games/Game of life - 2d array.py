@@ -70,7 +70,7 @@ class Textbox:
 
 
 def new_array():
-    return [0] * (width * height)
+    return [[0 for _ in range(width)] for _ in range(height)]
 
 
 def toggle_cell(x, y, state):
@@ -87,13 +87,13 @@ def toggle_cell(x, y, state):
 def click_cell(pos, board, button):
     cell_x = floor(pos[0] / scale)
     cell_y = floor(pos[1] / scale)
-    index = cell_y * height + cell_x
 
-    if board[index] == 1 and button == 3:
-        board[index] = 0
+    if board[cell_y][cell_x] == 1 and button == 3:
+        board[cell_y][cell_x] = 0
         toggle_cell(cell_x, cell_y, 0)
-    elif board[index] == 0 and button == 1:
-        board[index] = 1
+
+    elif board[cell_y][cell_x] == 0 and button == 1:
+        board[cell_y][cell_x] = 1
         toggle_cell(cell_x, cell_y, 1)
 
 
@@ -101,50 +101,30 @@ def cell_check(board, rescan=False):
     new_board = new_array()
 
     if rescan or not active_cells:
-        active_cells.clear()
-
-        for i in range(width * height):
-            x = i % width
-            y = floor(i / height)
-
-            if x == 0:
-                x_vals = [height - 1, 0, 1]
-            elif x >= height - 1:
-                x_vals = [x - 1, x, 0]
-            else:
-                x_vals = [x - 1, x, x + 1]
-
-            if x_vals[1] >= height:
-                x_vals = [height - 1, 0, 1]
-
+        for y in range(height):
             if y == 0:
-                y_vals = [width - 1, 0, 1]
-            elif y >= width - 1:
+                y_vals = [height - 1, 0, 1]
+            elif y >= height - 1:
                 y_vals = [y - 1, y, 0]
             else:
                 y_vals = [y - 1, y, y + 1]
 
-            if y_vals[1] >= width:
-                y_vals = [width - 1, 0, 1]
+            for x in range(width):
+                if x == 0:
+                    x_vals = [width - 1, 0, 1]
+                elif x >= width - 1:
+                    x_vals = [x - 1, x, 0]
+                else:
+                    x_vals = [x - 1, x, x + 1]
 
-            field_sum = 0
+                field_sum = sum([board[a][b] for a in y_vals for b in x_vals])
 
-            for a in y_vals:
-                for b in x_vals:
-                    if (a * width) + b <= len(board):
-                        field_sum += board[a * width + b]
-
-            # field_sum = sum([board[a * width + b] for a in y_vals for b in x_vals])
-
-            if field_sum == 3 or (field_sum == 4 and board[i] == 1):
-                active_cells.add(i)
+                if field_sum == 3 or (field_sum == 4 and board[y][x] == 1):
+                    active_cells.add((x, y))
 
         return board
     else:
-        for i in active_cells.copy():
-            x = i % width
-            y = floor(i / height)
-
+        for x, y in active_cells.copy():
             if x == 0:
                 x_neighbors = [width - 1, 0, 1]
             elif x == width - 1:
@@ -161,8 +141,6 @@ def cell_check(board, rescan=False):
 
             for cx in x_neighbors:
                 for cy in y_neighbors:
-                    index = cy * width + cx
-
                     if cx == 0:
                         x_vals = [width - 1, 0, 1]
                     elif cx == width - 1:
@@ -177,18 +155,18 @@ def cell_check(board, rescan=False):
                     else:
                         y_vals = [cy - 1, cy, cy + 1]
 
-                    field_sum = sum([board[a * width + b] for a in y_vals for b in x_vals])
+                    field_sum = sum([board[a][b] for a in y_vals for b in x_vals])
 
                     if field_sum == 3:
-                        new_board[index] = 1
+                        new_board[cy][cx] = 1
 
-                        if index not in active_cells:
-                            active_cells.add(index)
+                        if (cx, cy) not in active_cells:
+                            active_cells.add((cx, cy))
 
                     elif field_sum != 4:
-                        active_cells.discard(index)
+                        active_cells.discard((cx, cy))
                     else:
-                        new_board[index] = board[index]
+                        new_board[cy][cx] = board[cy][cx]
 
         return new_board
 
@@ -196,8 +174,8 @@ def cell_check(board, rescan=False):
 def draw_board():
     screen.fill((255, 255, 255))
 
-    for i in active_cells:
-        rect = ((i % width) * scale, floor(i / height) * scale, scale, scale)
+    for x, y in active_cells:
+        rect = (x * scale, y * scale, scale, scale)
         screen.fill((0, 0, 0), rect=rect)
 
     pygame.display.flip()
@@ -297,7 +275,7 @@ def parse_life_1_05(pattern):
             y_vals[y] += diff
 
     for i in range(len(x_vals)):
-        board[y_vals[i] * width + x_vals[i]] = 1
+        board[y_vals[i]][x_vals[i]] = 1
 
     game(0, load_board=board, rescan=True)
 
@@ -328,7 +306,7 @@ def parse_life_1_06(pattern):
             y_vals[y] += diff
 
     for i in range(len(x_vals)):
-        board[y_vals[i] * width + x_vals[i]] = 1
+        board[y_vals[i]][x_vals[i]] = 1
 
     game(0, load_board=board, rescan=True)
 
@@ -362,7 +340,7 @@ def parse_plaintext(pattern):
             y_vals[y] += diff
 
     for i in range(len(x_vals)):
-        board[y_vals[i] * width + x_vals[i]] = 1
+        board[y_vals[i]][x_vals[i]] = 1
 
     game(0, load_board=board, rescan=True)
 
@@ -458,7 +436,7 @@ def parse_rle(pattern):
             y_vals[y] += diff
 
     for i in range(len(x_vals)):
-        board[y_vals[i] * width + x_vals[i]] = 1
+        board[y_vals[i]][x_vals[i]] = 1
 
     game(0, load_board=board, rescan=True)
 
@@ -551,7 +529,7 @@ def game(steps, load_board=None, rescan=False):
 
                 if not textbox_visible:
                     if event.key == 32:  # Space
-                        start_generations = True
+                        start_generations = not start_generations
 
                     elif event.key == 114:  # R
                         active_cells.clear()
@@ -605,7 +583,9 @@ def game(steps, load_board=None, rescan=False):
                     last = now
 
                     board = cell_check(board)
-                    draw_board()
+
+                    if steps == 0 or current_step == steps:
+                        draw_board()
 
 
 def start(w, h, steps, s):
@@ -623,11 +603,11 @@ def start(w, h, steps, s):
     buttons['quit'] = Button("Quit")
 
     global screen
-    screen = pygame.display.set_mode((width * scale, height * scale))
+    screen = pygame.display.set_mode((width * scale, height * scale), pygame.RESIZABLE)
     screen.fill((255, 255, 255))
 
     pygame.scrap.init()
 
     game(steps)
 
-start(150, 100, 0, 10)
+start(144, 90, 100, 10)
