@@ -1,10 +1,11 @@
 import pickle
 import sys
+from statistics import median
 
 import pygame
 import requests
 
-from math import floor, sqrt
+from math import floor
 
 screen = None
 menu_visible = False
@@ -123,7 +124,6 @@ def cell_check(board, rescan=False):
             field_sum = sum([board[a * width + b] for a in y_vals for b in x_vals])
 
             if field_sum == 3 or (field_sum == 4 and board[i] == 1):
-                # new_board[i] = 1
                 active_cells.add(i)
             '''
             elif field_sum != 4:
@@ -248,10 +248,8 @@ def get_pattern_type(pattern):
     elif pattern[:6] == "!Name:":
         parse_plaintext(pattern)
 
-    '''
-    elif pattern[:4] == "x = ":
+    elif pattern[:2] == "#N":
         parse_rle(pattern)
-    '''
 
 
 def parse_life_1_05(pattern):
@@ -259,64 +257,49 @@ def parse_life_1_05(pattern):
 
     lines = repr(pattern).split(r'\r\n')
 
-    normal_rules = False
-    cell_block = []
-    board = []
-    start_x = start_y = 0
+    x_vals = []
+    y_vals = []
+    board = new_array()
 
-    for line in lines:
-        if '#' not in line:
-            cell_block.append(line)
-        elif line[:2] == '#N' or line == '#R 23/3':
-            normal_rules = True
-        elif line[:2] == '#P':
-            start_x = line[3:5].strip()
-            start_y = line[6:8].strip()
+    cell_block_start = [i for i in range(len(lines)) if '#' not in lines[i]][0]
 
-    if normal_rules:
-        block_width = 0
+    has_normal_rules = [True for line in lines if line.lower() == '#n' or line.lower() == '#r 23/3'][0]
 
-        for line in cell_block:
-            if len(line) > block_width:
-                block_width = len(line)
+    if not has_normal_rules:
+        print("This program doesn't support custom rules yet")
+        return
 
-        if start_x[0] == "-":
-            start_x = int(start_x[1]) * 2
+    for y in range(cell_block_start, len(lines)):
+        for x in range(len(lines[y])):
+            if lines[y][x] == "*":
+                x_vals.append(x)
+                y_vals.append(y)
 
-        if start_y[0] == "-":
-            start_y = int(start_y[1]) * 2
+    w_padding = (width - len(set(x_vals))) // 2
+    h_padding = (height - len(set(y_vals))) // 2
 
-        global width, height
-        width = int(start_x) + block_width
-        height = int(start_y) + len(cell_block)
+    if floor(median(x_vals)) < w_padding:
+        diff = (floor(median(x_vals)) * -1) + w_padding
+        for x in range(len(x_vals.copy())):
+            x_vals[x] += diff
 
-        if start_x != 0:
-            [cell_block.insert(0, '.') for _ in range(start_x + 1)]
+    if floor(median(y_vals)) < h_padding:
+        diff = floor((median(y_vals)) * -1) + h_padding
+        for y in range(len(y_vals.copy())):
+            y_vals[y] += diff
 
-        for x in range(len(cell_block.copy())):
-            while len(cell_block[x]) <= block_width + start_x:
-                cell_block[x] += "."
+    for i in range(len(x_vals)):
+        board[y_vals[i] * width + x_vals[i]] = 1
 
-        for line in cell_block:
-            for c in line:
-                if c == "*":
-                    board.append(1)
-                    active_cells.add(cell_block.index(line) * width + line.index(c))
-                elif c == ".":
-                    board.append(0)
-
-        game(0, load_board=board, rescan=True)
+    game(0, load_board=board, rescan=True)
 
 
 def parse_life_1_06(pattern):
     lines = repr(pattern).split(r'\r\n')
 
-    global width, height
-    width = 100
-    height = 100
-
     x_vals = []
     y_vals = []
+    board = new_array()
 
     for line in lines[1::]:
         if len(line) > 1:
@@ -326,64 +309,141 @@ def parse_life_1_06(pattern):
     w_padding = (width - len(set(x_vals))) // 2
     h_padding = (height - len(set(y_vals))) // 2
 
-    if min(x_vals) < w_padding:
-        diff = abs(min(x_vals)) + w_padding
+    if floor(median(x_vals)) < w_padding:
+        diff = (floor(median(x_vals)) * -1) + w_padding
         for x in range(len(x_vals.copy())):
             x_vals[x] += diff
 
-    if min(y_vals) < h_padding:
-        diff = abs(min(y_vals)) + h_padding
+    if floor(median(y_vals)) < h_padding:
+        diff = floor((median(y_vals)) * -1) + h_padding
         for y in range(len(y_vals.copy())):
             y_vals[y] += diff
 
-    board = new_array()
-
     for i in range(len(x_vals)):
-        board[y_vals[i] * 100 + x_vals[i]] = 1
+        board[y_vals[i] * width + x_vals[i]] = 1
 
     game(0, load_board=board, rescan=True)
 
 
 def parse_plaintext(pattern):
     lines = repr(pattern).split(r'\r\n')
-    cell_block = []
-    board = []
 
-    max_width = 0
+    x_vals = []
+    y_vals = []
+    board = new_array()
 
-    for line in lines:
-        if line[0:1] != "!" and line[0:2] != "'!":
-            cell_block.append(line)
+    cell_block_start = [i for i in range(len(lines)) if lines[i][0:1] != '!' and lines[i][0:2] != "'!"][0]
 
-            if len(line) > 1:
-                max_width = len(line)
+    for y in range(cell_block_start, len(lines)):
+        for x in range(len(lines[y])):
+            if lines[y][x] == "O":
+                x_vals.append(x)
+                y_vals.append(y)
 
-    for l in range(len(cell_block.copy())):
-        if cell_block[l] == '':
-            cell_block[l] = '.' * max_width
+    w_padding = (width - len(set(x_vals))) // 2
+    h_padding = (height - len(set(y_vals))) // 2
 
-    for line in cell_block:
-        print(line)
-        for c in line:
-            if c == "O":
-                board.append(1)
-            elif c == ".":
-                board.append(0)
+    if floor(median(x_vals)) < w_padding:
+        diff = (floor(median(x_vals)) * -1) + w_padding
+        for x in range(len(x_vals.copy())):
+            x_vals[x] += diff
 
-    global width, height
-    width = len(cell_block[0])
-    height = len(cell_block)
+    if floor(median(y_vals)) < h_padding:
+        diff = floor((median(y_vals)) * -1) + h_padding
+        for y in range(len(y_vals.copy())):
+            y_vals[y] += diff
 
-    for i in range(len(board)):
-        x = i % width
-        y = floor(i / height)
-
-        print(x, y, board[i])
+    for i in range(len(x_vals)):
+        board[y_vals[i] * width + x_vals[i]] = 1
 
     game(0, load_board=board, rescan=True)
 
 
-# def parse_rle(pattern):
+def parse_rle(pattern):
+    global width, height
+    lines = repr(pattern).split(r'\r\n')
+
+    x_vals = []
+    y_vals = []
+    cell_block = []
+
+    cell_block_start = [i for i in range(len(lines)) if lines[i][0:1] != '#' and lines[i][0:2] != "'#"][0]
+    parameters = lines[cell_block_start].split(',')
+
+    w = int(parameters[0][4:])
+    h = int(parameters[1][4:])
+
+    if w > width:
+        width = w
+    if h > height:
+        height = h
+
+    board = new_array()
+
+    if len(parameters) > 2:
+        has_normal_rules = True if parameters[2][8:].lower() == 'b3/s23' else False
+
+        if not has_normal_rules:
+            print("This program doesn't support custom rules yet")
+            return
+
+    current_line = []
+    last_num = 1
+    last_char_num = False
+
+    for line in lines[cell_block_start + 1:]:
+        for c in line.strip(" '").replace(' ', ''):
+            if c == '$':
+                cell_block.append(current_line)
+                current_line = []
+
+                if last_char_num:
+                    for _ in range(last_num - 1):
+                        cell_block.append(['b'])
+
+                last_char_num = False
+                last_num = 1
+            elif c == '!':
+                cell_block.append(current_line)
+                break
+            else:
+                if c.isdigit():
+                    if last_char_num:
+                        last_num = int(str(last_num) + c)
+                    else:
+                        last_num = int(c)
+
+                    last_char_num = True
+                else:
+                    last_char_num = False
+
+                    for _ in range(last_num):
+                        current_line.append(c)
+                    last_num = 1
+
+    for y in range(len(cell_block)):
+        for x in range(len(cell_block[y])):
+            if cell_block[y][x] == "o":
+                x_vals.append(x)
+                y_vals.append(y)
+
+    w_padding = (width - len(set(x_vals))) // 2
+    h_padding = (height - len(set(y_vals))) // 2
+
+    if min(x_vals) < w_padding:
+        diff = (min(x_vals) * -1) + w_padding
+        for x in range(len(x_vals.copy())):
+            x_vals[x] += diff
+
+    if min(y_vals) < h_padding:
+        diff = (min(y_vals) * -1) + h_padding
+        for y in range(len(y_vals.copy())):
+            y_vals[y] += diff
+
+    for i in range(len(x_vals)):
+        board[y_vals[i] * width + x_vals[i]] = 1
+
+    game(0, load_board=board, rescan=True)
 
 
 def game(steps, load_board=None, rescan=False):
@@ -466,24 +526,23 @@ def game(steps, load_board=None, rescan=False):
                     load_external(path_string)
 
             elif event.type == pygame.KEYUP:
-                if event.key == 306:
+                if event.key == 306:  # Ctrl
                     ctrl_pressed = False
+
                 elif event.key == 27:  # Escape
                     toggle_menu()
 
                 if not textbox_visible:
                     if event.key == 32:  # Space
                         start_generations = True
+
                     elif event.key == 114:  # R
                         game(steps, load_board=new_array())
 
         if mouse_down:
             mouse_pos = pygame.mouse.get_pos()
-            mouse_rel = pygame.mouse.get_rel()
 
             if floor(mouse_pos[0] / scale) != floor(old_mouse_pos[0] / scale) or floor(mouse_pos[1] / scale) != floor(old_mouse_pos[1] / scale):
-                print(mouse_rel)
-                print(sqrt((mouse_rel[0] ** 2) + (mouse_rel[1] ** 2)))
                 old_mouse_pos = mouse_pos
                 click_cell(mouse_pos, board, mouse_button_down)
 
