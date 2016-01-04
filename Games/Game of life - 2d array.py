@@ -411,15 +411,23 @@ def parse_rle(pattern):
     w = int(parameters[0][4:])
     h = int(parameters[1][4:])
 
+    global scale
+
     if w > width:
         width = w
         w_padding = 0
+
+        if scale * width > 1000:
+            scale = round(1000 / width)
     else:
         w_padding = (width - len(set(x_vals))) // 2
 
     if h > height:
         height = h
         h_padding = 0
+
+        if scale * height > 1000:
+            scale = round(1000 / height)
     else:
         h_padding = (height - len(set(y_vals))) // 2
 
@@ -456,12 +464,16 @@ def game(steps, load_board=None, rescan=False):
     mouse_down = False
     ctrl_pressed = False
     mouse_button_down = 0
-    old_mouse_pos = (-1, -1)
+    old_cell_pos = (-1, -1)
     path_string = ""
 
     last = pygame.time.get_ticks()
 
     draw_board()
+
+    if steps != 0:
+        global delay
+        delay = 0
 
     while True:
         for event in pygame.event.get():
@@ -501,7 +513,7 @@ def game(steps, load_board=None, rescan=False):
             elif event.type == pygame.MOUSEBUTTONUP:
                 if not menu_visible:
                     mouse_down = False
-                    old_mouse_pos = (-1, -1)
+                    old_cell_pos = (-1, -1)
 
             elif textbox_visible and event.type == pygame.KEYDOWN:
                 if event.key != 13:
@@ -525,6 +537,7 @@ def game(steps, load_board=None, rescan=False):
                     ctrl_pressed = False
 
                 elif event.key == 27:  # Escape
+                    textbox_visible = False
                     toggle_menu()
 
                 if not textbox_visible:
@@ -536,8 +549,6 @@ def game(steps, load_board=None, rescan=False):
                         game(steps, load_board=new_array())
 
                     elif 48 <= event.key <= 57:  # 0-9
-                        global delay
-
                         if event.key == 48:
                             delay = 0
 
@@ -569,10 +580,12 @@ def game(steps, load_board=None, rescan=False):
                             delay = 0
         if mouse_down:
             mouse_pos = pygame.mouse.get_pos()
+            cell_pos = (floor(mouse_pos[0] / scale), floor(mouse_pos[1] / scale))
 
-            if floor(mouse_pos[0] / scale) != floor(old_mouse_pos[0] / scale) or floor(mouse_pos[1] / scale) != floor(old_mouse_pos[1] / scale):
-                old_mouse_pos = mouse_pos
-                click_cell(mouse_pos, board, mouse_button_down)
+            if 0 <= cell_pos[0] <= (width - 1) and 0 <= cell_pos[1] <= (height - 1):
+                if cell_pos[0] != old_cell_pos[0] or cell_pos[1] != old_cell_pos[1]:
+                    old_cell_pos = cell_pos
+                    click_cell(mouse_pos, board, mouse_button_down)
 
         now = pygame.time.get_ticks()
 
@@ -581,20 +594,26 @@ def game(steps, load_board=None, rescan=False):
                 if steps == 0 or current_step < steps:
                     current_step += 1
                     last = now
-
                     board = cell_check(board)
 
                     if steps == 0 or current_step == steps:
                         draw_board()
 
 
-def start(w, h, steps, s):
+def start(steps, s, w=None, h=None):
     pygame.init()
 
-    global width, height, scale
-    width = w
-    height = h
+    video_info = pygame.display.Info()
+
+    global scale, width, height
     scale = s
+
+    if w is not None and h is not None:
+        width = w
+        height = h
+    else:
+        width = round(video_info.current_w / scale)
+        height = round(video_info.current_h / scale)
 
     buttons['resume'] = Button("Resume")
     buttons['save'] = Button("Save")
@@ -603,11 +622,11 @@ def start(w, h, steps, s):
     buttons['quit'] = Button("Quit")
 
     global screen
-    screen = pygame.display.set_mode((width * scale, height * scale), pygame.RESIZABLE)
+    screen = pygame.display.set_mode((width * scale, height * scale))  # , pygame.FULLSCREEN)
     screen.fill((255, 255, 255))
 
     pygame.scrap.init()
 
     game(steps)
 
-start(144, 90, 100, 10)
+start(0, 10)
