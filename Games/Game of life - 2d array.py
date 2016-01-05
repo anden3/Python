@@ -1,8 +1,10 @@
 import pickle
 import sys
 from itertools import product
+from random import random
 from statistics import median
 
+import numpy as np
 import pygame
 import requests
 
@@ -71,8 +73,13 @@ class Textbox:
         pygame.display.update((self.x, self.y, self.w, self.h))
 
 
-def new_array():
-    return [[0 for _ in range(width)] for _ in range(height)]
+def new_array(rand=False):
+    if rand:
+        # return [[1 if random() > 0.5 else 0 for _ in range(width)] for _ in range(height)]
+        return np.array([[1 if random() > 0.5 else 0 for _ in range(width)] for _ in range(height)], (height, width))
+    else:
+        # return [[0 for _ in range(width)] for _ in range(height)]
+        return np.zeros((height, width))
 
 
 def toggle_cell(x, y, state):
@@ -100,11 +107,21 @@ def click_cell(pos, board, button):
 
 
 def cell_check(board, rescan=False):
-    new_board = new_array()
+    # new_board = new_array()
+    new_board = np.zeros((height, width))
 
     if rescan or not active_cells:
+        global neighbors
+        neighbors = np.zeros((height, width, 2, 3))
+
+        for y, x in product(range(height), range(width)):
+            if y == 0:
+                if x == 0:
+                    neighbors[y][x] = board[height - 1:0:1, width - 1:0:1]
+
+        '''
         for y in range(height):
-            row = []
+            # row = []
 
             if y == 0:
                 y_vals = [height - 1, 0, 1]
@@ -114,7 +131,7 @@ def cell_check(board, rescan=False):
                 y_vals = [y - 1, y, y + 1]
 
             for x in range(width):
-                cell = [[], []]
+                # cell = [[], []]
                 field_sum = 0
 
                 if x == 0:
@@ -125,8 +142,11 @@ def cell_check(board, rescan=False):
                     x_vals = [x - 1, x, x + 1]
 
                 for i in range(3):
-                    cell[0].append(x_vals[i])
-                    cell[1].append(y_vals[i])
+                    # cell[0].append(x_vals[i])
+                    # cell[1].append(y_vals[i])
+                    neighbors[y][x][0][i] = x_vals[i]
+                    neighbors[y][x][1][i] = y_vals[i]
+                    # neighbors[y][x] = board[y_vals, x_vals]
 
                 for a in y_vals:
                     for b in x_vals:
@@ -135,13 +155,15 @@ def cell_check(board, rescan=False):
                 if field_sum == 3 or (field_sum == 4 and board[y][x] == 1):
                     active_cells.add((x, y))
 
-                row.append(cell)
+                # row.append(cell)
 
-            neighbors.append(row)
+            # neighbors.append(row)
+        '''
 
         return board
     else:
         for x, y in active_cells.copy():
+            '''
             for cx, cy in product(neighbors[y][x][0], neighbors[y][x][1]):
                 field_sum = 0
 
@@ -159,6 +181,7 @@ def cell_check(board, rescan=False):
                     active_cells.discard((cx, cy))
                 else:
                     new_board[cy][cx] = board[cy][cx]
+            '''
 
         return new_board
 
