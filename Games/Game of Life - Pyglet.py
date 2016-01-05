@@ -3,25 +3,39 @@ import sys
 from itertools import product
 from random import random
 from statistics import median
+from time import clock
 
 import numpy as np
-import pygame
+import pyglet
+import pyperclip
 import requests
+from pyglet.gl import *
+from pyglet.window import key
 
 from math import floor
 
-screen = None
+window = pyglet.window.Window()
+
 menu_visible = False
 textbox_visible = False
+loop_running = False
+
+old_cell_x = -1
+old_cell_y = -1
 
 width = 0
 height = 0
 scale = 0
 delay = 100
+steps = 0
+last_loop = 0
+
+path_string = ""
 
 buttons = {}
 textboxes = {}
 active_cells = set()
+board = []
 neighbors = []
 
 
@@ -93,17 +107,14 @@ def toggle_cell(x, y, state):
     pygame.display.update(rect)
 
 
-def click_cell(pos, board, button):
-    cell_x = floor(pos[0] / scale)
-    cell_y = floor(pos[1] / scale)
+def click_cell(x, y, board, button):
+    if board[y][x] == 1 and button == 3:
+        board[y][x] = 0
+        toggle_cell(x, y, 0)
 
-    if board[cell_y][cell_x] == 1 and button == 3:
-        board[cell_y][cell_x] = 0
-        toggle_cell(cell_x, cell_y, 0)
-
-    elif board[cell_y][cell_x] == 0 and button == 1:
-        board[cell_y][cell_x] = 1
-        toggle_cell(cell_x, cell_y, 1)
+    elif board[y][x] == 0 and button == 1:
+        board[y][x] = 1
+        toggle_cell(x, y, 1)
 
 
 def cell_check(board, rescan=False):
@@ -167,13 +178,22 @@ def cell_check(board, rescan=False):
 
 
 def draw_board():
-    screen.fill((255, 255, 255))
+    # screen.fill((255, 255, 255))
+    glClear(GL_COLOR_BUFFER_BIT)
 
     for x, y in active_cells:
-        rect = (x * scale, y * scale, scale, scale)
-        screen.fill((0, 0, 0), rect=rect)
+        # rect = (x * scale, y * scale, scale, scale)
 
-    pygame.display.flip()
+        glBegin(GL_QUADS)
+        glColor3f(0.0, 0.0, 0.0)
+        glVertex2f(x * scale, y * scale)
+        glVertex2f(x * scale + scale, y * scale)
+        glVertex2f(x * scale + scale, y * scale + scale)
+        glVertex2f(x * scale, y * scale + scale)
+        glEnd()
+
+        # glFlush()
+        # screen.fill((0, 0, 0), rect=rect)
 
 
 def toggle_menu():
@@ -184,7 +204,8 @@ def toggle_menu():
         draw_board()
     else:
         menu_visible = True
-        screen.fill((255, 255, 255))
+        # screen.fill((255, 255, 255))
+        glClear(GL_COLOR_BUFFER_BIT)
         [button.draw() for button in buttons.values()]
         pygame.display.flip()
 
@@ -197,7 +218,7 @@ def load_game():
     global menu_visible
     menu_visible = False
 
-    game(0, load_board=pickle.load(open('save_file.txt', 'rb')), rescan=True)
+    game(load_board=pickle.load(open('save_file.txt', 'rb')), rescan=True)
 
 
 def load_external(path=None):
@@ -272,7 +293,7 @@ def parse_life_1_05(pattern):
     for i in range(len(x_vals)):
         board[y_vals[i]][x_vals[i]] = 1
 
-    game(0, load_board=board, rescan=True)
+    game(load_board=board, rescan=True)
 
 
 def parse_life_1_06(pattern):
@@ -303,7 +324,7 @@ def parse_life_1_06(pattern):
     for i in range(len(x_vals)):
         board[y_vals[i]][x_vals[i]] = 1
 
-    game(0, load_board=board, rescan=True)
+    game(load_board=board, rescan=True)
 
 
 def parse_plaintext(pattern):
@@ -337,7 +358,7 @@ def parse_plaintext(pattern):
     for i in range(len(x_vals)):
         board[y_vals[i]][x_vals[i]] = 1
 
-    game(0, load_board=board, rescan=True)
+    game(load_board=board, rescan=True)
 
 
 def parse_rle(pattern):
@@ -406,7 +427,7 @@ def parse_rle(pattern):
     w = int(parameters[0][4:])
     h = int(parameters[1][4:])
 
-    global scale
+    global scale, board
 
     if w > width:
         width = w
@@ -441,29 +462,20 @@ def parse_rle(pattern):
     for i in range(len(x_vals)):
         board[y_vals[i]][x_vals[i]] = 1
 
-    game(0, load_board=board, rescan=True)
+    game(load_board=board, rescan=True)
 
 
-def game(steps, load_board=None, rescan=False):
-    global menu_visible, textbox_visible
+def game(load_board=None, rescan=False):
+    global menu_visible, textbox_visible, board
     menu_visible = False
     textbox_visible = False
 
     if load_board is not None:
         board = cell_check(load_board, rescan=rescan)
     else:
-        # board = cell_check(new_array())
         board = new_array()
 
     current_step = 0
-    start_generations = False
-    mouse_down = False
-    ctrl_pressed = False
-    mouse_button_down = 0
-    old_cell_pos = (-1, -1)
-    path_string = ""
-
-    last = pygame.time.get_ticks()
 
     draw_board()
 
@@ -472,124 +484,15 @@ def game(steps, load_board=None, rescan=False):
         delay = 0
 
     while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                sys.exit()
+        now = clock()
 
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                mouse_button_down = event.button
+        if loop_running and not menu_visible:
+            global last_loop
 
-                if not menu_visible:
-                    mouse_down = True
-                else:
-                    mouse_pos = pygame.mouse.get_pos()
-
-                    for button in buttons.values():
-                        if abs((button.x + button.w / 2) - mouse_pos[0]) < button.w / 2 and abs((button.y + button.h / 2) - mouse_pos[1]) < button.h / 2:
-                            if button.name.lower() == "resume":
-                                toggle_menu()
-                                break
-
-                            elif button.name.lower() == "save":
-                                save_game(board)
-                                break
-
-                            elif button.name.lower() == "load":
-                                load_game()
-                                break
-
-                            elif button.name.lower() == "load external":
-                                load_external()
-                                break
-
-                            elif button.name.lower() == "quit":
-                                pygame.quit()
-                                sys.exit()
-
-            elif event.type == pygame.MOUSEBUTTONUP:
-                if not menu_visible:
-                    mouse_down = False
-                    old_cell_pos = (-1, -1)
-
-            elif textbox_visible and event.type == pygame.KEYDOWN:
-                if event.key != 13:
-                    if event.key == 306:
-                        ctrl_pressed = True
-                    elif event.key == 8:
-                        path_string = path_string[0:-1]
-                    else:
-                        if ctrl_pressed and event.key == 118:
-                            path_string = pygame.scrap.get('text/plain')[:-1].decode('UTF-8')
-                        else:
-                            path_string += event.unicode
-
-                    textboxes['path'].update(path_string)
-
-                elif len(path_string) > 1:
-                    load_external(path_string)
-
-            elif event.type == pygame.KEYUP:
-                if event.key == 306:  # Ctrl
-                    ctrl_pressed = False
-
-                elif event.key == 27:  # Escape
-                    textbox_visible = False
-                    toggle_menu()
-
-                if not textbox_visible:
-                    if event.key == 32:  # Space
-                        start_generations = not start_generations
-
-                    elif event.key == 114:  # R
-                        active_cells.clear()
-                        game(steps, load_board=new_array())
-
-                    elif 48 <= event.key <= 57:  # 0-9
-                        if event.key == 48:
-                            delay = 0
-
-                        elif event.key == 49:
-                            delay = 1000
-
-                        elif event.key == 50:
-                            delay = 500
-
-                        elif event.key == 51:
-                            delay = 250
-
-                        elif event.key == 52:
-                            delay = 100
-
-                        elif event.key == 53:
-                            delay = 50
-
-                        elif event.key == 54:
-                            delay = 25
-
-                        elif event.key == 55:
-                            delay = 10
-
-                        elif event.key == 56:
-                            delay = 5
-
-                        elif event.key == 57:
-                            delay = 0
-        if mouse_down:
-            mouse_pos = pygame.mouse.get_pos()
-            cell_pos = (floor(mouse_pos[0] / scale), floor(mouse_pos[1] / scale))
-
-            if 0 <= cell_pos[0] <= (width - 1) and 0 <= cell_pos[1] <= (height - 1):
-                if cell_pos[0] != old_cell_pos[0] or cell_pos[1] != old_cell_pos[1]:
-                    old_cell_pos = cell_pos
-                    click_cell(mouse_pos, board, mouse_button_down)
-
-        now = pygame.time.get_ticks()
-
-        if start_generations and not menu_visible:
-            if now - last >= delay:
+            if now - last_loop >= delay:
                 if steps == 0 or current_step < steps:
                     current_step += 1
-                    last = now
+                    last_loop = now
 
                     board = cell_check(board)
 
@@ -597,10 +500,131 @@ def game(steps, load_board=None, rescan=False):
                         draw_board()
 
 
-def start(steps, s, w=None, h=None):
-    pygame.init()
+@window.event
+def on_key_press(symbol, modifiers):
+    if textbox_visible:
+        if symbol != key.ENTER:
+            global path_string
 
-    video_info = pygame.display.Info()
+            if symbol == key.BACKSPACE:
+                path_string = path_string[0:-1]
+            elif modifiers & key.MOD_CTRL and symbol == key.V:
+                    path_string = pyperclip.paste()
+            else:
+                textboxes['path'].update(path_string)
+
+        elif len(path_string) > 1:
+            load_external(path_string)
+
+
+def on_key_release(symbol):
+    if symbol == key.ESCAPE:
+        global textbox_visible
+        textbox_visible = False
+        toggle_menu()
+
+    if not textbox_visible:
+        global delay
+
+        if symbol == key.SPACE:
+            global loop_running
+            loop_running = not loop_running
+
+        elif symbol == key.R:
+            active_cells.clear()
+            game(load_board=new_array())
+
+        elif symbol == key._0:
+            delay = 0
+
+        elif symbol == key._1:
+            delay = 1000
+
+        elif symbol == key._2:
+            delay = 500
+
+        elif symbol == key._3:
+            delay = 250
+
+        elif symbol == key._4:
+            delay = 100
+
+        elif symbol == key._5:
+            delay = 50
+
+        elif symbol == key._6:
+            delay = 25
+
+        elif symbol == key._7:
+            delay = 10
+
+        elif symbol == key._8:
+            delay = 5
+
+        elif symbol == key._9:
+            delay = 0
+
+
+@window.event
+def on_text(text):
+    if textbox_visible:
+        global path_string
+        path_string += text
+
+
+@window.event
+def on_mouse_press(x, y, buttons, modifers):
+    if not menu_visible:
+        global old_cell_x, old_cell_y
+
+        cell_x = floor(x / scale)
+        cell_y = floor(y / scale)
+
+        if 0 <= cell_x <= (width - 1) and 0 <= cell_y <= (height - 1):
+            if cell_x != old_cell_x or cell_y != old_cell_y:
+                old_cell_x = cell_x
+                old_cell_y = cell_y
+
+                click_cell(cell_x, cell_y, board, button)
+    else:
+        for ui_button in buttons.values():
+            if abs((ui_button.x + ui_button.w / 2) - x) < ui_button.w / 2 and abs((ui_button.y + ui_button.h / 2) - y) < ui_button.h / 2:
+                if ui_button.name.lower() == "resume":
+                    toggle_menu()
+                    break
+
+                elif ui_button.name.lower() == "save":
+                    save_game(board)
+                    break
+
+                elif ui_button.name.lower() == "load":
+                    load_game()
+                    break
+
+                elif ui_button.name.lower() == "load external":
+                    load_external()
+                    break
+
+                elif ui_button.name.lower() == "quit":
+                    sys.exit()
+
+
+@window.event
+def on_mouse_release(x, y, buttons, modifers):
+    global old_cell_x, old_cell_y
+    old_cell_x = -1
+    old_cell_y = -1
+
+
+@window.event
+def on_draw():
+    pass
+    # window.clear()
+
+
+def start(s, w=None, h=None):
+    # window.push_handlers(pyglet.window.event.WindowEventLogger())
+    glClearColor(1.0, 1.0, 1.0, 1.0)
 
     global scale, width, height
     scale = s
@@ -608,30 +632,25 @@ def start(steps, s, w=None, h=None):
     if w is not None and h is not None:
         width = w
         height = h
-    else:
-        width = round(video_info.current_w / scale)
-        height = round(video_info.current_h / scale)
 
+    '''
     buttons['resume'] = Button("Resume")
     buttons['save'] = Button("Save")
     buttons['load'] = Button("Load")
     buttons['load_ext'] = Button("Load external")
     buttons['quit'] = Button("Quit")
+    '''
 
-    global screen
-    screen = pygame.display.set_mode((width * scale, height * scale), pygame.FULLSCREEN)
-    screen.fill((255, 255, 255))
+    global board
+    board = new_array(rand=True)
 
-    pygame.scrap.init()
+    active_cells.add((10, 20))
+    active_cells.add((5, 15))
 
-    game(steps)
+    draw_board()
 
-# start(0, 10)
+    pyglet.app.run()
 
-if __name__ == '__main__':
-    import cProfile, pstats
-    cProfile.run("start(0, 10)", "{}.profile".format(__file__))
-    s = pstats.Stats("{}.profile".format(__file__))
-    s.strip_dirs()
-    s.sort_stats("time").print_stats(10)
+    # game(steps)
 
+start(10, 400, 400)
