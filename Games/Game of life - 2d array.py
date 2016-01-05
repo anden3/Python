@@ -1,5 +1,6 @@
 import pickle
 import sys
+from itertools import product
 from statistics import median
 
 import pygame
@@ -19,6 +20,7 @@ delay = 100
 buttons = {}
 textboxes = {}
 active_cells = set()
+neighbors = []
 
 
 class Button:
@@ -102,6 +104,8 @@ def cell_check(board, rescan=False):
 
     if rescan or not active_cells:
         for y in range(height):
+            row = []
+
             if y == 0:
                 y_vals = [height - 1, 0, 1]
             elif y >= height - 1:
@@ -110,6 +114,9 @@ def cell_check(board, rescan=False):
                 y_vals = [y - 1, y, y + 1]
 
             for x in range(width):
+                cell = [[], []]
+                field_sum = 0
+
                 if x == 0:
                     x_vals = [width - 1, 0, 1]
                 elif x >= width - 1:
@@ -117,56 +124,41 @@ def cell_check(board, rescan=False):
                 else:
                     x_vals = [x - 1, x, x + 1]
 
-                field_sum = sum([board[a][b] for a in y_vals for b in x_vals])
+                for i in range(3):
+                    cell[0].append(x_vals[i])
+                    cell[1].append(y_vals[i])
+
+                for a in y_vals:
+                    for b in x_vals:
+                        field_sum += board[a][b]
 
                 if field_sum == 3 or (field_sum == 4 and board[y][x] == 1):
                     active_cells.add((x, y))
 
+                row.append(cell)
+
+            neighbors.append(row)
+
         return board
     else:
         for x, y in active_cells.copy():
-            if x == 0:
-                x_neighbors = [width - 1, 0, 1]
-            elif x == width - 1:
-                x_neighbors = [x - 1, x, 0]
-            else:
-                x_neighbors = [x - 1, x, x + 1]
+            for cx, cy in product(neighbors[y][x][0], neighbors[y][x][1]):
+                field_sum = 0
 
-            if y == 0:
-                y_neighbors = [height - 1, 0, 1]
-            elif y == height - 1:
-                y_neighbors = [y - 1, y, 0]
-            else:
-                y_neighbors = [y - 1, y, y + 1]
+                for nx, ny in product(neighbors[cy][cx][0], neighbors[cy][cx][1]):
+                    if board[ny][nx] == 1:
+                        field_sum += 1
 
-            for cx in x_neighbors:
-                for cy in y_neighbors:
-                    if cx == 0:
-                        x_vals = [width - 1, 0, 1]
-                    elif cx == width - 1:
-                        x_vals = [cx - 1, cx, 0]
-                    else:
-                        x_vals = [cx - 1, cx, cx + 1]
+                if field_sum == 3:
+                    new_board[cy][cx] = 1
 
-                    if cy == 0:
-                        y_vals = [height - 1, 0, 1]
-                    elif cy == height - 1:
-                        y_vals = [cy - 1, cy, 0]
-                    else:
-                        y_vals = [cy - 1, cy, cy + 1]
+                    if (cx, cy) not in active_cells:
+                        active_cells.add((cx, cy))
 
-                    field_sum = sum([board[a][b] for a in y_vals for b in x_vals])
-
-                    if field_sum == 3:
-                        new_board[cy][cx] = 1
-
-                        if (cx, cy) not in active_cells:
-                            active_cells.add((cx, cy))
-
-                    elif field_sum != 4:
-                        active_cells.discard((cx, cy))
-                    else:
-                        new_board[cy][cx] = board[cy][cx]
+                elif field_sum != 4:
+                    active_cells.discard((cx, cy))
+                else:
+                    new_board[cy][cx] = board[cy][cx]
 
         return new_board
 
@@ -594,6 +586,7 @@ def game(steps, load_board=None, rescan=False):
                 if steps == 0 or current_step < steps:
                     current_step += 1
                     last = now
+
                     board = cell_check(board)
 
                     if steps == 0 or current_step == steps:
