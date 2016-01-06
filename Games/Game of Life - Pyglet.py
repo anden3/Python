@@ -7,9 +7,9 @@ from time import clock
 
 import numpy as np
 import pyglet
+import pyglet.gl as gl
 import pyperclip
 import requests
-from pyglet.gl import *
 from pyglet.window import key
 
 from math import floor
@@ -178,9 +178,12 @@ def cell_check(board, rescan=False):
 
 
 def draw_board():
-    # screen.fill((255, 255, 255))
-    glClear(GL_COLOR_BUFFER_BIT)
+    for i in range(50):
+        for j in range(50):
+            # color = int(2.56 * (i + j))
+            pyglet.graphics.draw(1, gl.GL_POINTS, ('v2f', [i, j]))
 
+    '''
     for x, y in active_cells:
         # rect = (x * scale, y * scale, scale, scale)
 
@@ -192,8 +195,8 @@ def draw_board():
         glVertex2f(x * scale, y * scale + scale)
         glEnd()
 
-        # glFlush()
         # screen.fill((0, 0, 0), rect=rect)
+    '''
 
 
 def toggle_menu():
@@ -205,9 +208,9 @@ def toggle_menu():
     else:
         menu_visible = True
         # screen.fill((255, 255, 255))
-        glClear(GL_COLOR_BUFFER_BIT)
-        [button.draw() for button in buttons.values()]
-        pygame.display.flip()
+        gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+        # [button.draw() for button in buttons.values()]
+        # pygame.display.flip()
 
 
 def save_game(board):
@@ -618,13 +621,12 @@ def on_mouse_release(x, y, buttons, modifers):
 
 @window.event
 def on_draw():
-    pass
-    # window.clear()
+    window.clear()
 
 
 def start(s, w=None, h=None):
     # window.push_handlers(pyglet.window.event.WindowEventLogger())
-    glClearColor(1.0, 1.0, 1.0, 1.0)
+    gl.glClearColor(1.0, 1.0, 1.0, 1.0)
 
     global scale, width, height
     scale = s
