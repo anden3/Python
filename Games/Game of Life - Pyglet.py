@@ -3,11 +3,11 @@ import sys
 from itertools import product
 from random import random
 from statistics import median
-from time import clock
+# from time import clock
 
 import numpy as np
 import pyglet
-import pyglet.gl as gl
+from pyglet.gl import *
 import pyperclip
 import requests
 from pyglet.window import key
@@ -22,17 +22,16 @@ loop_running = False
 
 old_cell_x = -1
 old_cell_y = -1
+old_mouse_button = 0
 
 width = 0
 height = 0
 scale = 0
 delay = 100
-steps = 0
-last_loop = 0
 
 path_string = ""
 
-buttons = {}
+ui_buttons = {}
 textboxes = {}
 active_cells = set()
 board = []
@@ -87,6 +86,19 @@ class Textbox:
         pygame.display.update((self.x, self.y, self.w, self.h))
 
 
+def draw_rect(x, y, c):
+    r, g, b = c
+
+    glBegin(GL_QUADS)
+    glColor3f(r, g, b)
+
+    glVertex2f(x * scale, y * scale)
+    glVertex2f(x * scale + scale, y * scale)
+    glVertex2f(x * scale + scale, y * scale + scale)
+    glVertex2f(x * scale, y * scale + scale)
+    glEnd()
+
+
 def new_array(rand=False):
     if rand:
         # return [[1 if random() > 0.5 else 0 for _ in range(width)] for _ in range(height)]
@@ -96,29 +108,8 @@ def new_array(rand=False):
         return np.zeros((height, width))
 
 
-def toggle_cell(x, y, state):
-    rect = (x * scale, y * scale, scale, scale)
-
-    if state:
-        screen.fill((0, 0, 0), rect=rect)
-    else:
-        screen.fill((255, 255, 255), rect=rect)
-
-    pygame.display.update(rect)
-
-
-def click_cell(x, y, board, button):
-    if board[y][x] == 1 and button == 3:
-        board[y][x] = 0
-        toggle_cell(x, y, 0)
-
-    elif board[y][x] == 0 and button == 1:
-        board[y][x] = 1
-        toggle_cell(x, y, 1)
-
-
-def cell_check(board, rescan=False):
-    new_board = np.zeros((height, width))
+def cell_check(rescan=False):
+    new_board = new_array()
 
     if rescan or not active_cells:
         global neighbors
@@ -177,51 +168,29 @@ def cell_check(board, rescan=False):
         return new_board
 
 
-def draw_board():
-    for i in range(50):
-        for j in range(50):
-            # color = int(2.56 * (i + j))
-            pyglet.graphics.draw(1, gl.GL_POINTS, ('v2f', [i, j]))
-
-    '''
-    for x, y in active_cells:
-        # rect = (x * scale, y * scale, scale, scale)
-
-        glBegin(GL_QUADS)
-        glColor3f(0.0, 0.0, 0.0)
-        glVertex2f(x * scale, y * scale)
-        glVertex2f(x * scale + scale, y * scale)
-        glVertex2f(x * scale + scale, y * scale + scale)
-        glVertex2f(x * scale, y * scale + scale)
-        glEnd()
-
-        # screen.fill((0, 0, 0), rect=rect)
-    '''
-
-
 def toggle_menu():
     global menu_visible
 
     if menu_visible:
         menu_visible = False
-        draw_board()
     else:
         menu_visible = True
         # screen.fill((255, 255, 255))
-        gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+        # gl.glClear(gl.GL_COLOR_BUFFER_BIT)
         # [button.draw() for button in buttons.values()]
         # pygame.display.flip()
 
 
-def save_game(board):
+def save_game():
     pickle.dump(board, open('save_file.txt', 'wb'))
 
 
 def load_game():
-    global menu_visible
+    global menu_visible, board
     menu_visible = False
+    board = pickle.load(open('save_file.txt', 'rb'))
 
-    game(load_board=pickle.load(open('save_file.txt', 'rb')), rescan=True)
+    game(load_board=True, rescan=True)
 
 
 def load_external(path=None):
@@ -229,8 +198,8 @@ def load_external(path=None):
         global textbox_visible
         textbox_visible = True
 
-        screen.fill((255, 255, 255))
-        pygame.display.flip()
+        # screen.fill((255, 255, 255))
+        # pygame.display.flip()
 
         textboxes['path'] = Textbox(50)
         textboxes['path'].draw()
@@ -264,6 +233,8 @@ def parse_life_1_05(pattern):
 
     x_vals = []
     y_vals = []
+
+    global board
     board = new_array()
 
     cell_block_start = [i for i in range(len(lines)) if '#' not in lines[i]][0]
@@ -296,7 +267,7 @@ def parse_life_1_05(pattern):
     for i in range(len(x_vals)):
         board[y_vals[i]][x_vals[i]] = 1
 
-    game(load_board=board, rescan=True)
+    game(load_board=True, rescan=True)
 
 
 def parse_life_1_06(pattern):
@@ -304,6 +275,8 @@ def parse_life_1_06(pattern):
 
     x_vals = []
     y_vals = []
+
+    global board
     board = new_array()
 
     for line in lines[1::]:
@@ -327,7 +300,7 @@ def parse_life_1_06(pattern):
     for i in range(len(x_vals)):
         board[y_vals[i]][x_vals[i]] = 1
 
-    game(load_board=board, rescan=True)
+    game(load_board=True, rescan=True)
 
 
 def parse_plaintext(pattern):
@@ -335,6 +308,8 @@ def parse_plaintext(pattern):
 
     x_vals = []
     y_vals = []
+
+    global board
     board = new_array()
 
     cell_block_start = [i for i in range(len(lines)) if lines[i][0:1] != '!' and lines[i][0:2] != "'!"][0]
@@ -361,7 +336,7 @@ def parse_plaintext(pattern):
     for i in range(len(x_vals)):
         board[y_vals[i]][x_vals[i]] = 1
 
-    game(load_board=board, rescan=True)
+    game(load_board=True, rescan=True)
 
 
 def parse_rle(pattern):
@@ -465,42 +440,24 @@ def parse_rle(pattern):
     for i in range(len(x_vals)):
         board[y_vals[i]][x_vals[i]] = 1
 
-    game(load_board=board, rescan=True)
+    game(load_board=True, rescan=True)
 
 
-def game(load_board=None, rescan=False):
+def game(load_board=False, rescan=False):
     global menu_visible, textbox_visible, board
     menu_visible = False
     textbox_visible = False
 
-    if load_board is not None:
-        board = cell_check(load_board, rescan=rescan)
+    if load_board:
+        board = cell_check(rescan=rescan)
     else:
         board = new_array()
 
-    current_step = 0
 
-    draw_board()
-
-    if steps != 0:
-        global delay
-        delay = 0
-
-    while True:
-        now = clock()
-
-        if loop_running and not menu_visible:
-            global last_loop
-
-            if now - last_loop >= delay:
-                if steps == 0 or current_step < steps:
-                    current_step += 1
-                    last_loop = now
-
-                    board = cell_check(board)
-
-                    if steps == 0 or current_step == steps:
-                        draw_board()
+def update(dt):
+    if loop_running and not menu_visible:
+        global board
+        board = cell_check()
 
 
 @window.event
@@ -520,7 +477,8 @@ def on_key_press(symbol, modifiers):
             load_external(path_string)
 
 
-def on_key_release(symbol):
+@window.event
+def on_key_release(symbol, modifers):
     if symbol == key.ESCAPE:
         global textbox_visible
         textbox_visible = False
@@ -531,11 +489,19 @@ def on_key_release(symbol):
 
         if symbol == key.SPACE:
             global loop_running
-            loop_running = not loop_running
+
+            if not loop_running:
+                loop_running = True
+                cell_check(rescan=True)
+            else:
+                loop_running = False
 
         elif symbol == key.R:
             active_cells.clear()
-            game(load_board=new_array())
+            global board
+            board = new_array()
+
+            game(load_board=True)
 
         elif symbol == key._0:
             delay = 0
@@ -588,7 +554,13 @@ def on_mouse_press(x, y, buttons, modifers):
                 old_cell_x = cell_x
                 old_cell_y = cell_y
 
-                click_cell(cell_x, cell_y, board, button)
+                if buttons == 4 and board[cell_y][cell_x] == 1:
+                    board[cell_y][cell_x] = 0
+                    active_cells.discard((cell_x, cell_y))
+
+                elif buttons == 1 and board[y][cell_x] == 0:
+                    board[cell_y][cell_x] = 1
+                    active_cells.add((cell_x, cell_y))
     else:
         for ui_button in buttons.values():
             if abs((ui_button.x + ui_button.w / 2) - x) < ui_button.w / 2 and abs((ui_button.y + ui_button.h / 2) - y) < ui_button.h / 2:
@@ -597,7 +569,7 @@ def on_mouse_press(x, y, buttons, modifers):
                     break
 
                 elif ui_button.name.lower() == "save":
-                    save_game(board)
+                    save_game()
                     break
 
                 elif ui_button.name.lower() == "load":
@@ -613,6 +585,37 @@ def on_mouse_press(x, y, buttons, modifers):
 
 
 @window.event
+def on_mouse_hold(x, y, dx, dy, buttons, modifiers):
+    if not menu_visible:
+        global old_cell_x, old_cell_y
+
+        cell_x = floor(x / scale)
+        cell_y = floor(y / scale)
+
+        if 0 <= cell_x <= (width - 1) and 0 <= cell_y <= (height - 1):
+            if cell_x != old_cell_x or cell_y != old_cell_y:
+                old_cell_x = cell_x
+                old_cell_y = cell_y
+
+                if buttons == 4 and board[y][x] == 1:
+                    board[y][x] = 0
+                    active_cells.discard((cell_x, cell_y))
+
+                elif buttons == 1 and board[y][x] == 0:
+                    board[y][x] = 1
+                    active_cells.add((cell_x, cell_y))
+
+            elif buttons != old_mouse_button:
+                if buttons == 4 and board[y][x] == 1:
+                    board[y][x] = 0
+                    active_cells.discard((cell_x, cell_y))
+
+                elif buttons == 1 and board[y][x] == 0:
+                    board[y][x] = 1
+                    active_cells.add((cell_x, cell_y))
+
+
+@window.event
 def on_mouse_release(x, y, buttons, modifers):
     global old_cell_x, old_cell_y
     old_cell_x = -1
@@ -623,10 +626,14 @@ def on_mouse_release(x, y, buttons, modifers):
 def on_draw():
     window.clear()
 
+    for x, y in active_cells:
+        draw_rect(x, y, (0.0, 0.0, 0.0))
+
 
 def start(s, w=None, h=None):
     # window.push_handlers(pyglet.window.event.WindowEventLogger())
-    gl.glClearColor(1.0, 1.0, 1.0, 1.0)
+    glClearColor(1.0, 1.0, 1.0, 1.0)
+    glClear(GL_COLOR_BUFFER_BIT)
 
     global scale, width, height
     scale = s
@@ -634,6 +641,8 @@ def start(s, w=None, h=None):
     if w is not None and h is not None:
         width = w
         height = h
+
+    window.set_size(width, height)
 
     '''
     buttons['resume'] = Button("Resume")
@@ -643,16 +652,10 @@ def start(s, w=None, h=None):
     buttons['quit'] = Button("Quit")
     '''
 
-    global board
-    board = new_array(rand=True)
+    game()
 
-    active_cells.add((10, 20))
-    active_cells.add((5, 15))
-
-    draw_board()
+    pyglet.clock.schedule_interval(update, 1 / 10)
 
     pyglet.app.run()
 
-    # game(steps)
-
-start(10, 400, 400)
+start(10, 640, 480)
