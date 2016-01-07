@@ -14,7 +14,7 @@ from pyglet.window import key
 
 from math import floor
 
-window = pyglet.window.Window()
+window = pyglet.window.Window(style=pyglet.window.Window.WINDOW_STYLE_BORDERLESS)
 
 menu_visible = False
 textbox_visible = False
@@ -27,7 +27,6 @@ old_mouse_button = 0
 width = 0
 height = 0
 scale = 0
-delay = 100
 
 path_string = ""
 
@@ -37,24 +36,7 @@ active_cells = set()
 board = []
 neighbors = []
 
-
-class Button:
-    def __init__(self, text):
-        self.name = text
-        self.font = pygame.font.Font(None, 50)
-        self.text = self.font.render(text, 1, (0, 0, 0))
-
-        self.w = self.font.size(text)[0] + 10
-        self.h = self.font.size(text)[1] + 10
-
-        self.x = (width * scale - self.w) / 2
-        self.y = len(buttons) * 70 + 10
-
-        self.rect = (self.x, self.y, self.w, self.h)
-
-    def draw(self):
-        screen.fill((160, 160, 160), rect=self.rect)
-        screen.blit(self.text, (self.x + 5, self.y + 5))
+ui_batch = pyglet.graphics.Batch()
 
 
 class Textbox:
@@ -115,7 +97,7 @@ def cell_check(rescan=False):
         global neighbors
         neighbors = np.zeros((height, width, 2, 3), dtype=int)
 
-        for y in range(height):
+        for y in range(floor(height / scale)):
             if y == 0:
                 y_vals = [height - 1, 0, 1]
             elif y >= height - 1:
@@ -123,7 +105,7 @@ def cell_check(rescan=False):
             else:
                 y_vals = [y - 1, y, y + 1]
 
-            for x in range(width):
+            for x in range(floor(width / scale)):
                 field_sum = 0
 
                 if x == 0:
@@ -170,15 +152,7 @@ def cell_check(rescan=False):
 
 def toggle_menu():
     global menu_visible
-
-    if menu_visible:
-        menu_visible = False
-    else:
-        menu_visible = True
-        # screen.fill((255, 255, 255))
-        # gl.glClear(gl.GL_COLOR_BUFFER_BIT)
-        # [button.draw() for button in buttons.values()]
-        # pygame.display.flip()
+    menu_visible = not menu_visible
 
 
 def save_game():
@@ -198,8 +172,7 @@ def load_external(path=None):
         global textbox_visible
         textbox_visible = True
 
-        # screen.fill((255, 255, 255))
-        # pygame.display.flip()
+        glClear(GL_COLOR_BUFFER_BIT)
 
         textboxes['path'] = Textbox(50)
         textboxes['path'].draw()
@@ -462,6 +435,9 @@ def update(dt):
 
 @window.event
 def on_key_press(symbol, modifiers):
+    if symbol == pyglet.window.key.ESCAPE:
+        return pyglet.event.EVENT_HANDLED
+
     if textbox_visible:
         if symbol != key.ENTER:
             global path_string
@@ -485,8 +461,6 @@ def on_key_release(symbol, modifers):
         toggle_menu()
 
     if not textbox_visible:
-        global delay
-
         if symbol == key.SPACE:
             global loop_running
 
@@ -504,34 +478,44 @@ def on_key_release(symbol, modifers):
             game(load_board=True)
 
         elif symbol == key._0:
-            delay = 0
+            pyglet.clock.unschedule(update)
+            pyglet.clock.schedule(update)
 
         elif symbol == key._1:
-            delay = 1000
+            pyglet.clock.unschedule(update)
+            pyglet.clock.schedule_interval(update, 1000 / 1000)
 
         elif symbol == key._2:
-            delay = 500
+            pyglet.clock.unschedule(update)
+            pyglet.clock.schedule_interval(update, 500 / 1000)
 
         elif symbol == key._3:
-            delay = 250
+            pyglet.clock.unschedule(update)
+            pyglet.clock.schedule_interval(update, 250 / 1000)
 
         elif symbol == key._4:
-            delay = 100
+            pyglet.clock.unschedule(update)
+            pyglet.clock.schedule_interval(update, 100 / 1000)
 
         elif symbol == key._5:
-            delay = 50
+            pyglet.clock.unschedule(update)
+            pyglet.clock.schedule_interval(update, 50 / 1000)
 
         elif symbol == key._6:
-            delay = 25
+            pyglet.clock.unschedule(update)
+            pyglet.clock.schedule_interval(update, 25 / 1000)
 
         elif symbol == key._7:
-            delay = 10
+            pyglet.clock.unschedule(update)
+            pyglet.clock.schedule_interval(update, 10 / 1000)
 
         elif symbol == key._8:
-            delay = 5
+            pyglet.clock.unschedule(update)
+            pyglet.clock.schedule_interval(update, 5 / 1000)
 
         elif symbol == key._9:
-            delay = 0
+            pyglet.clock.unschedule(update)
+            pyglet.clock.schedule_interval(update, 1 / 1000)
 
 
 @window.event
@@ -562,7 +546,7 @@ def on_mouse_press(x, y, buttons, modifers):
                     board[cell_y][cell_x] = 1
                     active_cells.add((cell_x, cell_y))
     else:
-        for ui_button in buttons.values():
+        for ui_button in ui_buttons.values():
             if abs((ui_button.x + ui_button.w / 2) - x) < ui_button.w / 2 and abs((ui_button.y + ui_button.h / 2) - y) < ui_button.h / 2:
                 if ui_button.name.lower() == "resume":
                     toggle_menu()
@@ -585,7 +569,7 @@ def on_mouse_press(x, y, buttons, modifers):
 
 
 @window.event
-def on_mouse_hold(x, y, dx, dy, buttons, modifiers):
+def on_mouse_drag(x, y, dx, dy, buttons, modifiers):
     if not menu_visible:
         global old_cell_x, old_cell_y
 
@@ -626,8 +610,11 @@ def on_mouse_release(x, y, buttons, modifers):
 def on_draw():
     window.clear()
 
-    for x, y in active_cells:
-        draw_rect(x, y, (0.0, 0.0, 0.0))
+    if menu_visible:
+        ui_batch.draw()
+    else:
+        for x, y in active_cells:
+            draw_rect(x, y, (0.0, 0.0, 0.0))
 
 
 def start(s, w=None, h=None):
@@ -644,17 +631,15 @@ def start(s, w=None, h=None):
 
     window.set_size(width, height)
 
-    '''
-    buttons['resume'] = Button("Resume")
-    buttons['save'] = Button("Save")
-    buttons['load'] = Button("Load")
-    buttons['load_ext'] = Button("Load external")
-    buttons['quit'] = Button("Quit")
-    '''
+    ui_buttons['resume'] = pyglet.text.Label('Resume', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
+    ui_buttons['save'] = pyglet.text.Label('Save', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
+    ui_buttons['load'] = pyglet.text.Label('Load', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
+    ui_buttons['load_ext'] = pyglet.text.Label('Load external', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
+    ui_buttons['quit'] = pyglet.text.Label('Quit', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
 
     game()
 
-    pyglet.clock.schedule_interval(update, 1 / 10)
+    pyglet.clock.schedule_interval(update, 100 / 1000)
 
     pyglet.app.run()
 
