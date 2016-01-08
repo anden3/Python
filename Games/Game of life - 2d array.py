@@ -626,12 +626,4 @@ def start(steps, s, w=None, h=None):
 
     game(steps)
 
-# start(0, 10)
-
-if __name__ == '__main__':
-    import cProfile, pstats
-    cProfile.run("start(0, 10)", "{}.profile".format(__file__))
-    s = pstats.Stats("{}.profile".format(__file__))
-    s.strip_dirs()
-    s.sort_stats("time").print_stats(10)
-
+start(0, 10)

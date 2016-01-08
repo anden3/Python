@@ -3,13 +3,13 @@ import sys
 from itertools import product
 from random import random
 from statistics import median
-# from time import clock
+from time import clock
 
 import numpy as np
 import pyglet
-from pyglet.gl import *
 import pyperclip
 import requests
+from pyglet.gl import *
 from pyglet.window import key
 
 from math import floor
@@ -27,6 +27,7 @@ old_mouse_button = 0
 width = 0
 height = 0
 scale = 0
+delay = 0
 
 path_string = ""
 
@@ -39,6 +40,7 @@ neighbors = []
 ui_batch = pyglet.graphics.Batch()
 
 
+'''
 class Textbox:
     def __init__(self, y):
         self.font = pygame.font.Font(None, 20)
@@ -66,6 +68,7 @@ class Textbox:
         screen.blit(self.text, (self.x + 5, self.y + 5))
 
         pygame.display.update((self.x, self.y, self.w, self.h))
+'''
 
 
 def draw_rect(x, y, c):
@@ -97,7 +100,7 @@ def cell_check(rescan=False):
         global neighbors
         neighbors = np.zeros((height, width, 2, 3), dtype=int)
 
-        for y in range(floor(height / scale)):
+        for y in range(height):
             if y == 0:
                 y_vals = [height - 1, 0, 1]
             elif y >= height - 1:
@@ -105,7 +108,7 @@ def cell_check(rescan=False):
             else:
                 y_vals = [y - 1, y, y + 1]
 
-            for x in range(floor(width / scale)):
+            for x in range(width):
                 field_sum = 0
 
                 if x == 0:
@@ -174,8 +177,8 @@ def load_external(path=None):
 
         glClear(GL_COLOR_BUFFER_BIT)
 
-        textboxes['path'] = Textbox(50)
-        textboxes['path'].draw()
+        # textboxes['path'] = Textbox(50)
+        # textboxes['path'].draw()
 
     else:
         if path[-4:] == ".lif" or path[-4:] == ".rle" or path[-6:] == ".cells":
@@ -426,11 +429,23 @@ def game(load_board=False, rescan=False):
     else:
         board = new_array()
 
+    update()
 
-def update(dt):
-    if loop_running and not menu_visible:
-        global board
-        board = cell_check()
+
+def update():
+    last = 0
+
+    while True:
+        now = clock()
+
+        pyglet.clock.tick()
+        window.dispatch_events()
+
+        if loop_running and not menu_visible:
+            if now - last >= delay:
+                global board
+                board = cell_check()
+                draw_board()
 
 
 @window.event
@@ -444,8 +459,9 @@ def on_key_press(symbol, modifiers):
 
             if symbol == key.BACKSPACE:
                 path_string = path_string[0:-1]
-            elif modifiers & key.MOD_CTRL and symbol == key.V:
-                    path_string = pyperclip.paste()
+            elif ((modifiers & key.MOD_CTRL) or (modifiers & key.MOD_COMMAND)) and symbol == key.V:
+                path_string = pyperclip.paste()
+                print(path_string)
             else:
                 textboxes['path'].update(path_string)
 
@@ -455,12 +471,23 @@ def on_key_press(symbol, modifiers):
 
 @window.event
 def on_key_release(symbol, modifers):
-    if symbol == key.ESCAPE:
+    if symbol == key.Q:
+        sys.exit()
+
+    elif symbol == key.S:
+        save_game()
+
+    elif symbol == key.L:
+        load_game()
+
+    elif symbol == key.ESCAPE:
         global textbox_visible
         textbox_visible = False
         toggle_menu()
 
     if not textbox_visible:
+        global delay
+
         if symbol == key.SPACE:
             global loop_running
 
@@ -478,44 +505,54 @@ def on_key_release(symbol, modifers):
             game(load_board=True)
 
         elif symbol == key._0:
-            pyglet.clock.unschedule(update)
-            pyglet.clock.schedule(update)
+            delay = 0
+            # pyglet.clock.unschedule(update)
+            # pyglet.clock.schedule(update)
 
         elif symbol == key._1:
-            pyglet.clock.unschedule(update)
-            pyglet.clock.schedule_interval(update, 1000 / 1000)
+            delay = 1000
+            # pyglet.clock.unschedule(update)
+            # pyglet.clock.schedule_interval(update, 1000 / 1000)
 
         elif symbol == key._2:
-            pyglet.clock.unschedule(update)
-            pyglet.clock.schedule_interval(update, 500 / 1000)
+            delay = 500
+            # pyglet.clock.unschedule(update)
+            # pyglet.clock.schedule_interval(update, 500 / 1000)
 
         elif symbol == key._3:
-            pyglet.clock.unschedule(update)
-            pyglet.clock.schedule_interval(update, 250 / 1000)
+            delay = 250
+            # pyglet.clock.unschedule(update)
+            # pyglet.clock.schedule_interval(update, 250 / 1000)
 
         elif symbol == key._4:
-            pyglet.clock.unschedule(update)
-            pyglet.clock.schedule_interval(update, 100 / 1000)
+            delay = 100
+            # pyglet.clock.unschedule(update)
+            # pyglet.clock.schedule_interval(update, 100 / 1000)
 
         elif symbol == key._5:
-            pyglet.clock.unschedule(update)
-            pyglet.clock.schedule_interval(update, 50 / 1000)
+            delay = 50
+            # pyglet.clock.unschedule(update)
+            # pyglet.clock.schedule_interval(update, 50 / 1000)
 
         elif symbol == key._6:
-            pyglet.clock.unschedule(update)
-            pyglet.clock.schedule_interval(update, 25 / 1000)
+            delay = 25
+            # pyglet.clock.unschedule(update)
+            # pyglet.clock.schedule_interval(update, 25 / 1000)
 
         elif symbol == key._7:
-            pyglet.clock.unschedule(update)
-            pyglet.clock.schedule_interval(update, 10 / 1000)
+            delay = 10
+            # pyglet.clock.unschedule(update)
+            # pyglet.clock.schedule_interval(update, 10 / 1000)
 
         elif symbol == key._8:
-            pyglet.clock.unschedule(update)
-            pyglet.clock.schedule_interval(update, 5 / 1000)
+            delay = 5
+            # pyglet.clock.unschedule(update)
+            # pyglet.clock.schedule_interval(update, 5 / 1000)
 
         elif symbol == key._9:
-            pyglet.clock.unschedule(update)
-            pyglet.clock.schedule_interval(update, 1 / 1000)
+            delay = 1
+            # pyglet.clock.unschedule(update)
+            # pyglet.clock.schedule_interval(update, 1 / 1000)
 
 
 @window.event
@@ -542,9 +579,11 @@ def on_mouse_press(x, y, buttons, modifers):
                     board[cell_y][cell_x] = 0
                     active_cells.discard((cell_x, cell_y))
 
-                elif buttons == 1 and board[y][cell_x] == 0:
+                elif buttons == 1 and board[cell_y][cell_x] == 0:
                     board[cell_y][cell_x] = 1
                     active_cells.add((cell_x, cell_y))
+
+        draw_board()
     else:
         for ui_button in ui_buttons.values():
             if abs((ui_button.x + ui_button.w / 2) - x) < ui_button.w / 2 and abs((ui_button.y + ui_button.h / 2) - y) < ui_button.h / 2:
@@ -581,21 +620,23 @@ def on_mouse_drag(x, y, dx, dy, buttons, modifiers):
                 old_cell_x = cell_x
                 old_cell_y = cell_y
 
-                if buttons == 4 and board[y][x] == 1:
-                    board[y][x] = 0
+                if buttons == 4 and board[cell_y][cell_x] == 1:
+                    board[cell_y][cell_x] = 0
                     active_cells.discard((cell_x, cell_y))
 
-                elif buttons == 1 and board[y][x] == 0:
-                    board[y][x] = 1
+                elif buttons == 1 and board[cell_y][cell_x] == 0:
+                    board[cell_y][cell_x] = 1
                     active_cells.add((cell_x, cell_y))
 
+                draw_board()
+
             elif buttons != old_mouse_button:
-                if buttons == 4 and board[y][x] == 1:
-                    board[y][x] = 0
+                if buttons == 4 and board[cell_y][cell_x] == 1:
+                    board[cell_y][cell_x] = 0
                     active_cells.discard((cell_x, cell_y))
 
-                elif buttons == 1 and board[y][x] == 0:
-                    board[y][x] = 1
+                elif buttons == 1 and board[cell_y][cell_x] == 0:
+                    board[cell_y][cell_x] = 1
                     active_cells.add((cell_x, cell_y))
 
 
@@ -606,8 +647,7 @@ def on_mouse_release(x, y, buttons, modifers):
     old_cell_y = -1
 
 
-@window.event
-def on_draw():
+def draw_board():
     window.clear()
 
     if menu_visible:
@@ -615,6 +655,13 @@ def on_draw():
     else:
         for x, y in active_cells:
             draw_rect(x, y, (0.0, 0.0, 0.0))
+
+    window.flip()
+
+
+@window.event
+def on_draw():
+    pass
 
 
 def start(s, w=None, h=None):
@@ -626,10 +673,12 @@ def start(s, w=None, h=None):
     scale = s
 
     if w is not None and h is not None:
-        width = w
-        height = h
+        window.set_size(w, h)
 
-    window.set_size(width, height)
+        width = floor(w / scale)
+        height = floor(h / scale)
+    else:
+        window.set_size(width * scale, height * scale)
 
     ui_buttons['resume'] = pyglet.text.Label('Resume', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
     ui_buttons['save'] = pyglet.text.Label('Save', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
@@ -638,8 +687,6 @@ def start(s, w=None, h=None):
     ui_buttons['quit'] = pyglet.text.Label('Quit', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
 
     game()
-
-    pyglet.clock.schedule_interval(update, 100 / 1000)
 
     pyglet.app.run()
 
