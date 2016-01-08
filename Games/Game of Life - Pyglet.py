@@ -3,7 +3,7 @@ import sys
 from itertools import product
 from random import random
 from statistics import median
-from time import process_time
+from time import perf_counter
 
 import numpy as np
 import pyglet
@@ -14,7 +14,7 @@ from pyglet.window import key
 
 from math import floor
 
-window = pyglet.window.Window(vsync=False, style=pyglet.window.Window.WINDOW_STYLE_BORDERLESS)
+window = pyglet.window.Window(vsync=False, style=pyglet.window.Window.WINDOW_STYLE_TOOL)
 
 menu_visible = False
 textbox_visible = False
@@ -24,8 +24,8 @@ old_cell_x = -1
 old_cell_y = -1
 old_mouse_button = 0
 
-width = 64
-height = 48
+width = 0
+height = 0
 scale = 0
 delay = 0
 step_length = 0
@@ -449,7 +449,7 @@ def update():
 
     while True:
         # now = clock()
-        now = process_time()
+        now = perf_counter()
 
         pyglet.clock.tick()
         window.dispatch_events()
@@ -464,7 +464,7 @@ def update():
                 if step_length == 0 or current_step % step_length == 0:
                     draw_board()
 
-        times.append((process_time() - now) * 1000)
+                times.append((perf_counter() - now) * 1000)
 
 
 @window.event
@@ -492,9 +492,16 @@ def on_key_press(symbol, modifiers):
 def on_key_release(symbol, modifers):
     if symbol == key.Q:
         if len(times) > 0:
-            print("Average FPS:\t" + str(round(1000 / (sum(times) / len(times)), 3)) + " FPS.")
-            print("Max FPS:\t\t" + str(round(1000 / min(times), 3)) + " FPS.")
-            print("Min FPS:\t\t" + str(round(1000 / max(times), 3)) + " FPS.")
+            sorted_times = sorted(times)
+
+            print("Total loops:\t" + str(len(sorted_times)) + ".")
+            print("Average loop:\t" + str(round(sum(sorted_times) / len(sorted_times), 3)) + " ms.")
+            print("Fastest loop:\t" + str(round(min(sorted_times), 3)) + " ms.")
+            print("Slowest loop:\t" + str(round(max(sorted_times), 3)) + " ms.")
+
+            print("Average FPS:\t" + str(round(1000 / (sum(sorted_times) / len(sorted_times)), 3)) + " FPS.")
+            print("Max FPS:\t\t" + str(round(1000 / sorted_times[0], 3)) + " FPS.")
+            print("Min FPS:\t\t" + str(round(1000 / sorted_times[-1], 3)) + " FPS.")
 
         sys.exit()
 

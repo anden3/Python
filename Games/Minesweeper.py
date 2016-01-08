@@ -1,20 +1,31 @@
-table = []
+from random import random
+
+width = 0
+height = 0
+mines = 0
+
+board = []
+board_visibility = []
 
 
-def make_table():
-    x = int(input("Rows: "))
-    y = int(input("Columns: "))
-
-    for _ in range(x):
-        table.append([["_"] * y], )
+def new_board():
+    global board
+    board = [[0 for _ in range(width)] for _ in range(height)]
 
 
-def print_table():
-    for x in range(len(table)):
-        for y in range(len(table[x])):
-            print(" ".join(table[x][y]))
+def create_board():
+    for y in range(height):
+        for x in range(width):
+            board[y][x] = round(random())
 
-make_table()
-table[0][1] = "X"
-print(table)
-print_table()
+    print(board)
+
+
+def start(w=10, h=10):
+    global width, height
+    width, height = w, h
+
+    new_board()
+    create_board()
+
+start()
