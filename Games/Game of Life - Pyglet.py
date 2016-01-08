@@ -3,7 +3,7 @@ import sys
 from itertools import product
 from random import random
 from statistics import median
-from time import clock
+from time import process_time
 
 import numpy as np
 import pyglet
@@ -14,7 +14,7 @@ from pyglet.window import key
 
 from math import floor
 
-window = pyglet.window.Window(style=pyglet.window.Window.WINDOW_STYLE_BORDERLESS)
+window = pyglet.window.Window(vsync=False, style=pyglet.window.Window.WINDOW_STYLE_BORDERLESS)
 
 menu_visible = False
 textbox_visible = False
@@ -24,10 +24,11 @@ old_cell_x = -1
 old_cell_y = -1
 old_mouse_button = 0
 
-width = 0
-height = 0
+width = 64
+height = 48
 scale = 0
 delay = 0
+step_length = 0
 
 path_string = ""
 
@@ -36,6 +37,8 @@ textboxes = {}
 active_cells = set()
 board = []
 neighbors = []
+
+times = []
 
 ui_batch = pyglet.graphics.Batch()
 
@@ -203,8 +206,6 @@ def get_pattern_type(pattern):
 
 
 def parse_life_1_05(pattern):
-    active_cells.clear()
-
     lines = repr(pattern).split(r'\r\n')
 
     x_vals = []
@@ -212,6 +213,7 @@ def parse_life_1_05(pattern):
 
     global board
     board = new_array()
+    active_cells.clear()
 
     cell_block_start = [i for i in range(len(lines)) if '#' not in lines[i]][0]
 
@@ -242,8 +244,9 @@ def parse_life_1_05(pattern):
 
     for i in range(len(x_vals)):
         board[y_vals[i]][x_vals[i]] = 1
+        active_cells.add((x_vals[i], y_vals[i]))
 
-    game(load_board=True, rescan=True)
+    game(load_board=True)
 
 
 def parse_life_1_06(pattern):
@@ -254,6 +257,7 @@ def parse_life_1_06(pattern):
 
     global board
     board = new_array()
+    active_cells.clear()
 
     for line in lines[1::]:
         if len(line) > 1:
@@ -275,8 +279,9 @@ def parse_life_1_06(pattern):
 
     for i in range(len(x_vals)):
         board[y_vals[i]][x_vals[i]] = 1
+        active_cells.add((x_vals[i], y_vals[i]))
 
-    game(load_board=True, rescan=True)
+    game(load_board=True)
 
 
 def parse_plaintext(pattern):
@@ -287,6 +292,7 @@ def parse_plaintext(pattern):
 
     global board
     board = new_array()
+    active_cells.clear()
 
     cell_block_start = [i for i in range(len(lines)) if lines[i][0:1] != '!' and lines[i][0:2] != "'!"][0]
 
@@ -311,14 +317,16 @@ def parse_plaintext(pattern):
 
     for i in range(len(x_vals)):
         board[y_vals[i]][x_vals[i]] = 1
+        active_cells.add((x_vals[i], y_vals[i]))
 
-    game(load_board=True, rescan=True)
+    game(load_board=True)
 
 
 def parse_rle(pattern):
     lines = []
 
     global width, height
+
     if '\\r\\n' in repr(pattern):
         lines = repr(pattern).split('\\r\\n')
     elif '\\n' in repr(pattern):
@@ -402,6 +410,7 @@ def parse_rle(pattern):
         h_padding = (height - len(set(y_vals))) // 2
 
     board = new_array()
+    active_cells.clear()
 
     if round(median(x_vals)) < w_padding:
         diff = round(median(x_vals) * -1) + w_padding
@@ -415,8 +424,9 @@ def parse_rle(pattern):
 
     for i in range(len(x_vals)):
         board[y_vals[i]][x_vals[i]] = 1
+        active_cells.add((x_vals[i], y_vals[i]))
 
-    game(load_board=True, rescan=True)
+    game(load_board=True)
 
 
 def game(load_board=False, rescan=False):
@@ -428,24 +438,33 @@ def game(load_board=False, rescan=False):
         board = cell_check(rescan=rescan)
     else:
         board = new_array()
+        cell_check(rescan=True)
 
     update()
 
 
 def update():
     last = 0
+    current_step = 0
 
     while True:
-        now = clock()
+        # now = clock()
+        now = process_time()
 
         pyglet.clock.tick()
         window.dispatch_events()
 
         if loop_running and not menu_visible:
             if now - last >= delay:
+                current_step += 1
+
                 global board
                 board = cell_check()
-                draw_board()
+
+                if step_length == 0 or current_step % step_length == 0:
+                    draw_board()
+
+        times.append((process_time() - now) * 1000)
 
 
 @window.event
@@ -472,6 +491,11 @@ def on_key_press(symbol, modifiers):
 @window.event
 def on_key_release(symbol, modifers):
     if symbol == key.Q:
+        if len(times) > 0:
+            print("Average FPS:\t" + str(round(1000 / (sum(times) / len(times)), 3)) + " FPS.")
+            print("Max FPS:\t\t" + str(round(1000 / min(times), 3)) + " FPS.")
+            print("Min FPS:\t\t" + str(round(1000 / max(times), 3)) + " FPS.")
+
         sys.exit()
 
     elif symbol == key.S:
@@ -490,69 +514,41 @@ def on_key_release(symbol, modifers):
 
         if symbol == key.SPACE:
             global loop_running
-
-            if not loop_running:
-                loop_running = True
-                cell_check(rescan=True)
-            else:
-                loop_running = False
+            loop_running = not loop_running
 
         elif symbol == key.R:
             active_cells.clear()
-            global board
-            board = new_array()
-
-            game(load_board=True)
-
-        elif symbol == key._0:
-            delay = 0
-            # pyglet.clock.unschedule(update)
-            # pyglet.clock.schedule(update)
+            game()
 
         elif symbol == key._1:
             delay = 1000
-            # pyglet.clock.unschedule(update)
-            # pyglet.clock.schedule_interval(update, 1000 / 1000)
 
         elif symbol == key._2:
             delay = 500
-            # pyglet.clock.unschedule(update)
-            # pyglet.clock.schedule_interval(update, 500 / 1000)
 
         elif symbol == key._3:
             delay = 250
-            # pyglet.clock.unschedule(update)
-            # pyglet.clock.schedule_interval(update, 250 / 1000)
 
         elif symbol == key._4:
             delay = 100
-            # pyglet.clock.unschedule(update)
-            # pyglet.clock.schedule_interval(update, 100 / 1000)
 
         elif symbol == key._5:
             delay = 50
-            # pyglet.clock.unschedule(update)
-            # pyglet.clock.schedule_interval(update, 50 / 1000)
 
         elif symbol == key._6:
             delay = 25
-            # pyglet.clock.unschedule(update)
-            # pyglet.clock.schedule_interval(update, 25 / 1000)
 
         elif symbol == key._7:
             delay = 10
-            # pyglet.clock.unschedule(update)
-            # pyglet.clock.schedule_interval(update, 10 / 1000)
 
         elif symbol == key._8:
             delay = 5
-            # pyglet.clock.unschedule(update)
-            # pyglet.clock.schedule_interval(update, 5 / 1000)
 
         elif symbol == key._9:
             delay = 1
-            # pyglet.clock.unschedule(update)
-            # pyglet.clock.schedule_interval(update, 1 / 1000)
+
+        elif symbol == key._0:
+            delay = 0
 
 
 @window.event
@@ -664,30 +660,35 @@ def on_draw():
     pass
 
 
-def start(s, w=None, h=None):
+def start(s=10, w=640, h=480, fullscreen=False, step_len=0):
     # window.push_handlers(pyglet.window.event.WindowEventLogger())
     glClearColor(1.0, 1.0, 1.0, 1.0)
     glClear(GL_COLOR_BUFFER_BIT)
 
-    global scale, width, height
+    global scale, step_length, width, height
     scale = s
+    step_length = step_len
 
-    if w is not None and h is not None:
-        window.set_size(w, h)
+    if fullscreen:
+        w = pyglet.window.get_platform().get_default_display().get_default_screen().width
+        h = pyglet.window.get_platform().get_default_display().get_default_screen().height
 
-        width = floor(w / scale)
-        height = floor(h / scale)
-    else:
-        window.set_size(width * scale, height * scale)
+    window.set_size(w, h)
 
-    ui_buttons['resume'] = pyglet.text.Label('Resume', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
-    ui_buttons['save'] = pyglet.text.Label('Save', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
-    ui_buttons['load'] = pyglet.text.Label('Load', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
-    ui_buttons['load_ext'] = pyglet.text.Label('Load external', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
-    ui_buttons['quit'] = pyglet.text.Label('Quit', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
+    if fullscreen:
+        window.set_fullscreen(True)
+
+    width = floor(w / scale)
+    height = floor(h / scale)
+
+    # ui_buttons['resume'] = pyglet.text.Label('Resume', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
+    # ui_buttons['save'] = pyglet.text.Label('Save', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
+    # ui_buttons['load'] = pyglet.text.Label('Load', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
+    # ui_buttons['load_ext'] = pyglet.text.Label('Load external', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
+    # ui_buttons['quit'] = pyglet.text.Label('Quit', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
 
     game()
 
     pyglet.app.run()
 
-start(10, 640, 480)
+start(fullscreen=False)
