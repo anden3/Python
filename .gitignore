@@ -221,3 +221,5 @@ pip-log.txt
 /.idea/Content.iml
 /.idea/misc.xml
 /.idea/workspace.xml
+*.xml
+Games/save_file.txt
