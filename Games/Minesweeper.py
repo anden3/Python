@@ -15,6 +15,7 @@ fails = 0
 mine_num = 0
 
 window = pyglet.window.Window()
+batch = pyglet.graphics.Batch()
 
 board = []
 mines = set()
@@ -37,6 +38,11 @@ number_vertices = {
 def draw_rect(x, y, c):
     r, g, b = c
 
+    batch.add(4, gl.GL_QUADS, None,
+              ('v2f', (x * scale, y * scale, x * scale + scale, y * scale, x * scale + scale, y * scale + scale, x * scale, y * scale + scale)),
+              ('c3f', (r, g, b, r, g, b, r, g, b, r, g, b)))
+
+    '''
     gl.glBegin(gl.GL_QUADS)
     gl.glColor3f(r, g, b)
 
@@ -45,11 +51,20 @@ def draw_rect(x, y, c):
     gl.glVertex2f(x * scale + scale, y * scale + scale)
     gl.glVertex2f(x * scale, y * scale + scale)
     gl.glEnd()
+    '''
 
 
 def draw_sub_rect(x, y, sx, sy):
     sw = floor(scale / 5)
 
+    batch.add(4, gl.GL_QUADS, None,
+              ('v2f', ((x * scale) + (sx * sw), (y * scale) + (sy * sw),
+                       (x * scale) + (sx * sw) + sw, (y * scale) + (sy * sw),
+                       (x * scale) + (sx * sw) + sw, (y * scale) + (sy * sw) + sw,
+                       (x * scale) + (sx * sw), (y * scale) + (sy * sw) + sw)),
+              ('c3f', (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)))
+
+    '''
     gl.glBegin(gl.GL_QUADS)
 
     gl.glColor3f(0.0, 0.0, 0.0)
@@ -60,6 +75,7 @@ def draw_sub_rect(x, y, sx, sy):
     gl.glVertex2f((x * scale) + (sx * sw), (y * scale) + (sy * sw) + sw)
 
     gl.glEnd()
+    '''
 
 
 def draw_number(x, y, num):
@@ -139,6 +155,8 @@ def draw_board():
     for x, y in flags:
         draw_rect(x, y, (1.0, 0.0, 0.0))
 
+    batch.draw()
+
 
 @window.event
 def on_mouse_press(x, y, buttons, modifers):
@@ -158,6 +176,7 @@ def on_mouse_press(x, y, buttons, modifers):
         elif buttons == 4:
             if (cell_x, cell_y) in flags:
                 flags.discard((cell_x, cell_y))
+                draw_rect(cell_x, cell_y, (0.6, 0.6, 0.6))
             else:
                 flags.add((cell_x, cell_y))
 
@@ -195,4 +214,4 @@ def start(w=1280, h=720, s=20, m=300):
 
     pyglet.app.run()
 
-start(w=500, h=500, s=50, m=10)
+start()
