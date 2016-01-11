@@ -34,53 +34,48 @@ number_vertices = {
     9: [(1, 0), (2, 0), (3, 0), (3, 1), (1, 2), (2, 2), (3, 2), (1, 3), (3, 3), (1, 4), (2, 4), (3, 4)]
 }
 
+number_colors = {
+    1: (0.0, 1.0, 0.0),  # Blue
+    2: (0.0, 0.0, 1.0),  # Green
+    3: (1.0, 0.0, 0.0),  # Red
+    4: (0.0, 0.5, 0.0),  # Dark blue
+    5: (0.647, 0.1647, 0.1647),  # Brown
+    6: (0.0, 1.0, 1.0),  # Cyan
+    7: (0.0, 0.0, 0.0),  # Black
+    8: (0.6, 0.6, 0.6)   # Grey
+}
+
 
 def draw_rect(x, y, c):
     r, g, b = c
+    padding_lt = 1
+    padding_rb = 1
 
     batch.add(4, gl.GL_QUADS, None,
-              ('v2f', (x * scale, y * scale, x * scale + scale, y * scale, x * scale + scale, y * scale + scale, x * scale, y * scale + scale)),
+              ('v2f', (x * scale + padding_lt, y * scale + padding_lt,
+                       x * scale + scale - padding_rb, y * scale + padding_lt,
+                       x * scale + scale - padding_rb, y * scale + scale - padding_rb,
+                       x * scale + padding_lt, y * scale + scale - padding_rb)),
               ('c3f', (r, g, b, r, g, b, r, g, b, r, g, b)))
 
-    '''
-    gl.glBegin(gl.GL_QUADS)
-    gl.glColor3f(r, g, b)
 
-    gl.glVertex2f(x * scale, y * scale)
-    gl.glVertex2f(x * scale + scale, y * scale)
-    gl.glVertex2f(x * scale + scale, y * scale + scale)
-    gl.glVertex2f(x * scale, y * scale + scale)
-    gl.glEnd()
-    '''
+def draw_sub_rect(x, y, sx, sy, c):
+    r, g, b = c
 
-
-def draw_sub_rect(x, y, sx, sy):
-    sw = floor(scale / 5)
+    padding = 2
+    sw = floor((scale - padding) / 5)
 
     batch.add(4, gl.GL_QUADS, None,
-              ('v2f', ((x * scale) + (sx * sw), (y * scale) + (sy * sw),
-                       (x * scale) + (sx * sw) + sw, (y * scale) + (sy * sw),
-                       (x * scale) + (sx * sw) + sw, (y * scale) + (sy * sw) + sw,
-                       (x * scale) + (sx * sw), (y * scale) + (sy * sw) + sw)),
-              ('c3f', (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)))
-
-    '''
-    gl.glBegin(gl.GL_QUADS)
-
-    gl.glColor3f(0.0, 0.0, 0.0)
-
-    gl.glVertex2f((x * scale) + (sx * sw), (y * scale) + (sy * sw))
-    gl.glVertex2f((x * scale) + (sx * sw) + sw, (y * scale) + (sy * sw))
-    gl.glVertex2f((x * scale) + (sx * sw) + sw, (y * scale) + (sy * sw) + sw)
-    gl.glVertex2f((x * scale) + (sx * sw), (y * scale) + (sy * sw) + sw)
-
-    gl.glEnd()
-    '''
+              ('v2f', ((x * scale + padding) + (sx * sw), (y * scale + padding) + (sy * sw),
+                       (x * scale + padding) + (sx * sw) + sw, (y * scale + padding) + (sy * sw),
+                       (x * scale + padding) + (sx * sw) + sw, (y * scale + padding) + (sy * sw) + sw,
+                       (x * scale + padding) + (sx * sw), (y * scale + padding) + (sy * sw) + sw)),
+              ('c3f', (r, g, b, r, g, b, r, g, b, r, g, b)))
 
 
 def draw_number(x, y, num):
     if 1 <= num <= 9:
-        [draw_sub_rect(x, y, sx, sy) for sx, sy in number_vertices[num]]
+        [draw_sub_rect(x, y, sx, sy, number_colors[num]) for sx, sy in number_vertices[num]]
     else:
         return
 
@@ -94,10 +89,7 @@ def add_mines():
     probability = float(mine_num / (height * width))
     print("Mine probability: " + str(round(probability * 100, 2)) + "%.")
 
-    for y in range(height):
-        for x in range(width):
-            if random() < probability:
-                mines.add((x, y))
+    [mines.add((x, y)) for x in range(width) for y in range(height) if random() < probability]
 
 
 def add_numbers():
@@ -117,14 +109,7 @@ def add_numbers():
             else:
                 x_vals = [x - 1, x, x + 1]
 
-            neighbor_mines = 0
-
-            for cy in y_vals:
-                for cx in x_vals:
-                    if (cx, cy) in mines:
-                        neighbor_mines += 1
-
-            board[y][x] = neighbor_mines
+            board[y][x] = sum([1 for cx in x_vals for cy in y_vals if (cx, cy) in mines])
 
 
 def board_clear(x, y):
@@ -152,8 +137,7 @@ def draw_board():
         draw_rect(x, y, (1.0, 1.0, 1.0))
         draw_number(x, y, board[y][x])
 
-    for x, y in flags:
-        draw_rect(x, y, (1.0, 0.0, 0.0))
+    [draw_rect(x, y, (1.0, 0.0, 0.0)) for x, y in flags]
 
     batch.draw()
 
@@ -206,11 +190,6 @@ def start(w=1280, h=720, s=20, m=300):
     new_board()
     add_mines()
     add_numbers()
-
-    '''
-    for row in board[::-1]:
-        print(''.join([str(cell) for cell in row]))
-    '''
 
     pyglet.app.run()
 
