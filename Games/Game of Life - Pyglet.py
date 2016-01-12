@@ -650,14 +650,41 @@ def on_mouse_release(x, y, buttons, modifers):
     old_cell_y = -1
 
 
+def get_vertices():
+    vertices = []
+
+    for x, y in active_cells:
+        vertices.append(x * scale)
+        vertices.append(y * scale)
+
+        vertices.append(x * scale + scale)
+        vertices.append(y * scale)
+
+        vertices.append(x * scale + scale)
+        vertices.append(y * scale + scale)
+
+        vertices.append(x * scale)
+        vertices.append(y * scale + scale)
+
+    return vertices
+
+
 def draw_board():
     window.clear()
 
     if menu_visible:
         ui_batch.draw()
     else:
-        for x, y in active_cells:
-            draw_rect(x, y, (0.0, 0.0, 0.0))
+        vertices = get_vertices()
+
+        vertices_gl = (GLfloat * len(vertices))(*vertices)
+
+        glVertexPointer(2, GL_INT, 0, vertices_gl)
+
+        glDrawElements(GL_QUADS, 4, GL_UNSIGNED_INT, vertices_gl)
+
+        # for x, y in active_cells:
+        #     draw_rect(x, y, (0.0, 0.0, 0.0))
 
     window.flip()
 
@@ -668,9 +695,10 @@ def on_draw():
 
 
 def start(s=10, w=640, h=480, fullscreen=False, step_len=0):
-    # window.push_handlers(pyglet.window.event.WindowEventLogger())
     glClearColor(1.0, 1.0, 1.0, 1.0)
     glClear(GL_COLOR_BUFFER_BIT)
+
+    glEnableClientState(GL_VERTEX_ARRAY)
 
     global scale, step_length, width, height
     scale = s

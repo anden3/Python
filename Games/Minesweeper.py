@@ -1,8 +1,10 @@
+import pickle
 import sys
 from random import random
 
 import pyglet
 import pyglet.gl as gl
+from pyglet.window import key
 
 from math import floor
 
@@ -11,8 +13,10 @@ sys.setrecursionlimit(100000)
 width = 0
 height = 0
 scale = 0
-fails = 0
 mine_num = 0
+
+first_click = True
+game_running = True
 
 window = pyglet.window.Window()
 batch = pyglet.graphics.Batch()
@@ -80,6 +84,52 @@ def draw_number(x, y, num):
         return
 
 
+def save_game():
+    save_data = [width, height, scale, board, mines, board_visibility, flags]
+    pickle.dump(save_data, open('minesweeper_save.txt', 'wb'))
+
+
+def load_game():
+    save_data = pickle.load(open('minesweeper_save.txt', 'rb'))
+
+    global batch
+    batch = pyglet.graphics.Batch()
+
+    global width, height, scale, board, mines, board_visibility, flags
+    width = save_data[0]
+    height = save_data[1]
+    scale = save_data[2]
+    board = save_data[3]
+    mines = save_data[4]
+    board_visibility = save_data[5]
+    flags = save_data[6]
+
+    window.dispatch_event('on_draw')
+
+
+def reset_game():
+    global first_click, game_running, batch
+    first_click = True
+    game_running = True
+
+    batch = pyglet.graphics.Batch()
+
+    mines.clear()
+    board_visibility.clear()
+    flags.clear()
+
+    new_board()
+    add_mines()
+    add_numbers()
+
+    window.dispatch_event('on_draw')
+
+
+def game_over():
+    for x, y in mines:
+        [draw_sub_rect(x, y, sx, sy, (0.0, 0.0, 0.0)) for sx, sy in [(1, 0), (3, 0), (1.5, 1), (2.5, 1), (2, 2), (1.5, 3), (2.5, 3), (1, 4), (3, 4)]]
+
+
 def new_board():
     global board
     board = [[0 for _ in range(width)] for _ in range(height)]
@@ -143,20 +193,62 @@ def draw_board():
 
 
 @window.event
+def on_key_press(symbol, modifers):
+    if symbol == key.Q:
+        sys.exit()
+    elif symbol == key.S:
+        save_game()
+    elif symbol == key.L:
+        load_game()
+    elif symbol == key.R:
+        reset_game()
+
+
+@window.event
 def on_mouse_press(x, y, buttons, modifers):
+    global game_running
+
     cell_x = floor(x / scale)
     cell_y = floor(y / scale)
 
-    if (cell_x, cell_y) not in board_visibility:
+    if game_running and (cell_x, cell_y) not in board_visibility:
         if buttons == 1 and (cell_x, cell_y) not in flags:
+            global first_click
+
             if (cell_x, cell_y) not in mines:
+                first_click = False
+
                 if board[cell_y][cell_x] == 0:
                     board_clear(cell_x, cell_y)
                 else:
                     board_visibility.add((cell_x, cell_y))
+            elif first_click:
+                first_click = False
+
+                mines.discard((cell_x, cell_y))
+
+                if (0, 0) not in mines:
+                    mines.add((0, 0))
+                elif (width - 1, 0) not in mines:
+                    mines.add((width - 1, 0))
+                elif (width - 1, height - 1) not in mines:
+                    mines.add((width - 1, height - 1))
+                else:
+                    mines.add((0, height - 1))
+
+                new_board()
+                add_numbers()
+
+                if board[cell_y][cell_x] == 0:
+                    board_clear(cell_x, cell_y)
+                else:
+                    board_visibility.add((cell_x, cell_y))
+
             else:
                 print("Game over!")
-                sys.exit()
+                game_running = False
+                game_over()
+
         elif buttons == 4:
             if (cell_x, cell_y) in flags:
                 flags.discard((cell_x, cell_y))
@@ -166,7 +258,7 @@ def on_mouse_press(x, y, buttons, modifers):
 
                 if flags == mines:
                     print("You have won!")
-                    sys.exit()
+                    game_running = False
 
 
 @window.event
