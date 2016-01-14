@@ -1,4 +1,4 @@
-from math import floor
+from math import floor, ceil
 
 words = []
 letters_dict = {}
@@ -22,41 +22,52 @@ char_value = {
     'n': 1,
     'o': 2,
     'p': 4,
+    'q': 0,
     'r': 1,
     's': 1,
     't': 1,
     'u': 4,
     'v': 3,
+    'w': 0,
     'x': 8,
     'y': 7,
     'z': 8,
     'å': 4,
     'ä': 4,
-    'ö': 4
+    'ö': 4,
+
+    'è': 0
 }
 
 
-def choose_dict():
-    language = input("Swedish or English?: ")
-
-    if language[0:1].lower() == 's':
+def choose_dict(language='swedish'):
+    if language == 'swedish':
         return open('swedish_words.txt', 'r').read().split('\n')
-    elif language[0:1].lower() == 'e':
-        return open('/usr/share/dict/words', 'r').read().split('\n')
     else:
-        print("Unknown language, please try again.")
-        return choose_dict()
+        return open('/usr/share/dict/words', 'r').read().split('\n')
 
 
 def get_letters():
-    chars = list(input("What letters do you have?: ").replace(' ', '').replace('w', '').lower())
+    chars = list(input("What letters do you have?: ").replace(' ', '').lower())
     copy = chars.copy()
 
     for i, c in enumerate(copy):
         if c.isdigit():
-            if i < len(copy) - 1 and not copy[i + 1].isdigit():
+            if i < len(copy) - 1 and copy[i + 1].isalpha():
                 fixed_letters[int(c) - 1] = copy[i + 1]
                 chars.remove(c)
+
+            elif copy[i + 1] == '[':
+                if copy.index(']', i + 1):
+                    fixed_letters[int(c) - 1] = copy[i + 2:copy.index(']', i + 1)]
+                    offset = len(copy) - len(chars)
+
+                    for _ in range(chars.index(']') + 1):
+                        chars.pop(i - offset)
+
+            elif copy[i + 1] == '*':
+                fixed_letters[int(c) - 1] = '*'
+                chars.pop(i)
 
     return chars
 
@@ -64,35 +75,76 @@ def get_letters():
 def scan_words():
     fixed_matches = set(words)
     word_values = {}
+    word_lists = []
+    wild_cards = 0
 
     if len(fixed_letters) > 0:
         for char_index in fixed_letters:
-            for word in fixed_matches.copy():
-                if len(word) - 1 >= max(fixed_letters):
-                    if word[char_index].lower() != fixed_letters[char_index]:
+            if isinstance(fixed_letters[char_index], list):
+                word_lists.append(fixed_letters[char_index])
+
+                for word in fixed_matches.copy():
+                    if len(word) - 1 >= max(fixed_letters):
+                        if word[char_index].lower() not in fixed_letters[char_index]:
+                            fixed_matches.discard(word)
+                    else:
                         fixed_matches.discard(word)
-                else:
-                    fixed_matches.discard(word)
 
-    for word in fixed_matches.copy():
-        for letter in letters:
-            letters_dict[letter] = True
+            elif fixed_letters[char_index] == '*':
+                wild_cards += 1
+            else:
+                for word in fixed_matches.copy():
+                    if len(word) - 1 >= max(fixed_letters):
+                        if word[char_index].lower() != fixed_letters[char_index]:
+                            fixed_matches.discard(word)
+                    else:
+                        fixed_matches.discard(word)
 
-        if len(word) > 0:
-            for char in word.lower():
-                if not letters_dict.get(char, False) or char not in letters:
-                    fixed_matches.discard(word)
-                    break
-                else:
-                    letters_dict[char] = False
-        else:
-            fixed_matches.discard(word)
+    if len(letters) > 0:
+        for word in fixed_matches.copy():
+            word_list_values = []
+            wild_cards_local = wild_cards
+
+            for letter in letters:
+                letters_dict[letter] = True
+
+            for _ in range(len(word_lists)):
+                word_list_values.append(True)
+
+            if len(word) > 0:
+                for char in word.lower():
+                    if char in letters and letters_dict.get(char, False):
+                        letters_dict[char] = False
+
+                    elif len(word_lists) > 0:
+                        is_in_wordlist = False
+
+                        for y in range(len(word_lists)):
+                            for x in range(len(word_lists[y])):
+                                if char in word_lists[y][x] and word_list_values[y]:
+                                    word_list_values[y] = False
+                                    is_in_wordlist = True
+
+                        if not is_in_wordlist and wild_cards_local <= 0:
+                            fixed_matches.discard(word)
+                            break
+                        else:
+                            wild_cards_local -= 1
+
+                    elif wild_cards_local > 0:
+                        wild_cards_local -= 1
+
+                    else:
+                        fixed_matches.discard(word)
+                        break
+            else:
+                fixed_matches.discard(word)
 
     for word in fixed_matches:
         word_values[word.lower()] = sum([char_value[c] for c in word.lower()])
 
     for word in sorted(fixed_matches, key=lambda w: word_values[w.lower()]):
-        print(word.lower() + ''.join('\t' * (3 - floor(len(word) / 4))) + str(word_values[word.lower()]))
+        print(word.lower() + ''.join('\t' * (ceil(len(max(fixed_matches, key=len)) / 4 + 0.1) - floor(len(word) / 4))) + str(word_values[word.lower()]))
 
 
 def init():
@@ -100,5 +152,6 @@ def init():
     words = choose_dict()
     letters = get_letters()
     scan_words()
+    init()
 
 init()
