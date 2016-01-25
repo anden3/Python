@@ -517,7 +517,7 @@ def morse_code():
             matches.append(word)
 
     if len(matches) > 1:
-        print("Matching words: " + ' '.join(match.capitalize() for match in matches))
+        print("Matching Words: " + ' '.join(match.capitalize() for match in matches))
         print("Matching frequencies: " + ' '.join(str(words[match]) for match in matches))
         print("Too many matches, please try again.")
         morse_code()

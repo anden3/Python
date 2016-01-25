@@ -2,7 +2,7 @@ import time
 
 tri_nums = [1]
 
-file = open("words.txt")
+file = open("Words.txt")
 words = file.read()
 file.close()
 

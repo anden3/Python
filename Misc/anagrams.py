@@ -44,7 +44,7 @@ def choose_dict(language='swedish'):
     if language == 'swedish':
         return open('swedish_words.txt', 'r').read().split('\n')
     else:
-        return open('/usr/share/dict/words', 'r').read().split('\n')
+        return open('/usr/share/dict/Words', 'r').read().split('\n')
 
 
 def get_letters():
