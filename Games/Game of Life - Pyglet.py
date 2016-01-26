@@ -43,37 +43,6 @@ times = []
 ui_batch = pyglet.graphics.Batch()
 
 
-'''
-class Textbox:
-    def __init__(self, y):
-        self.font = pygame.font.Font(None, 20)
-
-        self.x = (width * scale - 300) / 2
-        self.y = y
-
-        self.w = 300
-        self.h = 30
-
-        self.text = None
-
-    def draw(self):
-        screen.fill((200, 200, 200), rect=(self.x, self.y, self.w, self.h))
-        pygame.display.update((self.x, self.y, self.w, self.h))
-
-    def update(self, text):
-        if self.font.size(text)[0] > 290:
-            self.w = self.font.size(text)[0] + 10
-            self.x = (width * scale - self.w) / 2
-
-        self.text = self.font.render(text, 1, (0, 0, 0))
-
-        screen.fill((200, 200, 200), rect=(self.x, self.y, self.w, self.h))
-        screen.blit(self.text, (self.x + 5, self.y + 5))
-
-        pygame.display.update((self.x, self.y, self.w, self.h))
-'''
-
-
 def draw_rect(x, y, c):
     r, g, b = c
 
@@ -89,10 +58,8 @@ def draw_rect(x, y, c):
 
 def new_array(rand=False):
     if rand:
-        # return [[1 if random() > 0.5 else 0 for _ in range(width)] for _ in range(height)]
         return np.array([[1 if random() > 0.5 else 0 for _ in range(width)] for _ in range(height)])
     else:
-        # return [[0 for _ in range(width)] for _ in range(height)]
         return np.zeros((height, width))
 
 
@@ -179,9 +146,6 @@ def load_external(path=None):
         textbox_visible = True
 
         glClear(GL_COLOR_BUFFER_BIT)
-
-        # textboxes['path'] = Textbox(50)
-        # textboxes['path'].draw()
 
     else:
         if path[-4:] == ".lif" or path[-4:] == ".rle" or path[-6:] == ".cells":
@@ -448,7 +412,6 @@ def update():
     current_step = 0
 
     while True:
-        # now = clock()
         now = perf_counter()
 
         pyglet.clock.tick()
@@ -715,12 +678,6 @@ def start(s=10, w=640, h=480, fullscreen=False, step_len=0):
 
     width = floor(w / scale)
     height = floor(h / scale)
-
-    # ui_buttons['resume'] = pyglet.text.Label('Resume', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
-    # ui_buttons['save'] = pyglet.text.Label('Save', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
-    # ui_buttons['load'] = pyglet.text.Label('Load', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
-    # ui_buttons['load_ext'] = pyglet.text.Label('Load external', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
-    # ui_buttons['quit'] = pyglet.text.Label('Quit', font_name='Times New Roman', font_size=20, x=window.width // 2, y=len(ui_buttons) * 70 + 10, batch=ui_batch)
 
     game()
 

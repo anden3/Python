@@ -42,7 +42,7 @@ char_value = {
 
 def choose_dict(language='swedish'):
     if language == 'swedish':
-        return open('swedish_words.txt', 'r').read().split('\n')
+        return open('../Words/swedish_words.txt', 'r').read().split('\n')
     else:
         return open('/usr/share/dict/Words', 'r').read().split('\n')
 
@@ -149,7 +149,7 @@ def scan_words():
 
 def init():
     global words, letters
-    words = choose_dict()
+    words = choose_dict('english')
     letters = get_letters()
     scan_words()
     init()

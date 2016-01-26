@@ -9,7 +9,6 @@ width = 0
 scale = 0
 
 snake = None
-
 pickup_pos = None
 
 window = pyglet.window.Window()
