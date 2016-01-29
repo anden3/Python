@@ -1,7 +1,7 @@
 from time import perf_counter
 
 max_degree = ("", 0)
-words = open("../Words/enable1.txt").read().split()
+words = open("../Words/english_words.txt").read().split()
 
 
 def return_garland_degree(w):
