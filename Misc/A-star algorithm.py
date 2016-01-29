@@ -1,7 +1,5 @@
 from time import perf_counter
 
-from PIL import Image
-
 board = [
     [0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0],
     [0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0],
@@ -34,12 +32,6 @@ class Node:
         self.G = 0
 
 nodes = [[Node(x, y) for x in range(width)] for y in range(height)]
-
-image = Image.open('maze.png')
-pixels = list(image.getdata())
-w, h = image.size
-pixels = [pixels[i * width:(i + 1) * width] for i in range(height)]
-print(pixels)
 
 
 def distance(node1, node2):

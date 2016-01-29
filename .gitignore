@@ -218,8 +218,4 @@ pip-log.txt
 ## PyCharm
 /Misc/saved.html
 .idea/
-/.idea/Content.iml
-/.idea/misc.xml
-/.idea/workspace.xml
-*.xml
 Games/save_file.txt
