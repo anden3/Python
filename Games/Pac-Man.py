@@ -9,6 +9,7 @@ from math import floor
 width = 0
 height = 0
 scale = 0
+tolerance = 0.5
 
 window = pyglet.window.Window()
 dot_batch = pyglet.graphics.Batch()
@@ -18,6 +19,7 @@ life_batch = pyglet.graphics.Batch()
 entity_batch = pyglet.graphics.Batch()
 
 pacman = None
+enemies = []
 
 dots = set()
 walls = set()
@@ -37,7 +39,7 @@ board = [
     [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 3, 0, 0, 3, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 3, 0, 0, 3, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 3, 0, 0, 3, 3, 0, 0, 3, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 3, 0, 3, 3, 3, 3, 0, 3, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
     [3, 3, 3, 3, 3, 3, 3, 1, 3, 3, 3, 3, 0, 3, 3, 3, 3, 0, 3, 3, 3, 3, 1, 3, 3, 3, 3, 3, 3, 3],
     [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 3, 0, 3, 3, 3, 3, 0, 3, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
@@ -105,6 +107,8 @@ text_positions = [
     (10, -2.8, 'H'), (11.05, -2.8, 'I'), (12, -2.8, 'G'), (13.3, -2.8, 'H'),
     (15, -2.8, 'S'), (16.2, -2.8, 'C'), (17.4, -2.8, 'O'), (18.6, -2.8, 'R'), (19.8, -2.8, 'E'),
 ]
+
+circle_vertices = {}
 
 
 class Pacman:
@@ -184,7 +188,211 @@ class Pacman:
                 return
 
     def draw(self):
-        draw_circle(self.x, self.y, self.r, 0.5, (1.0, 1.0, 0.0), entity_batch)
+        draw_circle(self.x, self.y, self.r, (1.0, 1.0, 0.0), entity_batch)
+
+
+class Enemy:
+    def __init__(self, x, y, color):
+        self.x = x
+        self.y = y
+        self.r = 14
+        self.c = color
+        self.d = None
+        self.speed = 2
+
+    def move(self, dt):
+        for x, y, d in a_star(Node(self.x, board_height + 1 - self.y), Node(pacman.x, board_height + 1 - pacman.y)):
+            if abs(self.x - x) < 0.3 and abs((board_height + 1 - self.y) - y) < 0.3:
+                self.d = d
+                break
+
+        if self.d == 'L':
+            self.y = round(self.y)
+            self.x -= self.speed * dt
+        elif self.d == 'R':
+            self.y = round(self.y)
+            self.x += self.speed * dt
+        elif self.d == 'U':
+            self.x = round(self.x)
+            self.y += self.speed * dt
+        elif self.d == 'D':
+            self.x = round(self.x)
+            self.y -= self.speed * dt
+
+    def draw(self):
+        # draw_sub_rect(self.x, self.y, 2, 2, 16, 16, self.c, entity_batch)
+        draw_circle(self.x, self.y, self.r, self.c, entity_batch)
+
+
+class Node:
+    def __init__(self, x, y):
+        self.x = round(x)
+        self.y = round(y)
+        self.parent = None
+        self.H = 0
+        self.G = 0
+
+nodes = [[Node(x, y) for x in range(board_width)] for y in range(board_height)]
+
+
+def draw_rect(x, y, c, batch):
+    r, g, b = c
+    padding_lt = 1
+    padding_rb = 1
+
+    batch.add(4, gl.GL_QUADS, None,
+              ('v2f', (x * scale + padding_lt, y * scale + padding_lt,
+                       x * scale + scale - padding_rb, y * scale + padding_lt,
+                       x * scale + scale - padding_rb, y * scale + scale - padding_rb,
+                       x * scale + padding_lt, y * scale + scale - padding_rb)),
+              ('c3f', (r, g, b, r, g, b, r, g, b, r, g, b)))
+
+
+def draw_sub_rect(x, y, sx, sy, sw, sh, c, batch):
+    r, g, b = c
+
+    batch.add(4, gl.GL_QUADS, None,
+              ('v2f', ((x * scale) + sx, (y * scale) + sy,
+                       (x * scale) + sx + sw, (y * scale) + sy,
+                       (x * scale) + sx + sw, (y * scale) + sy + sh,
+                       (x * scale) + sx, (y * scale) + sy + sh)),
+              ('c3f', (r, g, b, r, g, b, r, g, b, r, g, b)))
+
+
+def generate_circle(radius):
+    verts = set()
+    added_verts = set()
+
+    if radius not in circle_vertices:
+        circle_vertices[radius] = []
+
+    for sy in range(-radius, radius + 1):
+        for sx in range(-radius, radius + 1):
+            if (sx ** 2 + sy ** 2) ** 0.5 - radius <= tolerance:
+                verts.add((round((sx + radius + (scale / 2 - radius))), round(sy + radius + (scale / 2 - radius))))
+
+    for x, y in verts:
+        if (x, y) not in added_verts:
+            cell_width = radius * 2
+            cell_height = radius * 2
+
+            while cell_width > 0 and cell_height > 0:
+                fits = True
+
+                if (x + cell_width, y) not in verts:
+                    fits = False
+                    cell_width -= 1
+
+                if (x, y + cell_height) not in verts:
+                    fits = False
+                    cell_height -= 1
+
+                if (x + cell_width, y + cell_height) not in verts:
+                    fits = False
+                    if (x + cell_width, y + cell_height - 1) in verts:
+                        cell_height -= 1
+                    elif (x + cell_width - 1, y + cell_height) in verts:
+                        cell_width -= 1
+                    else:
+                        cell_height -= 1
+                        cell_width -= 1
+
+                if fits:
+                    break
+
+            circle_vertices[radius].append((x, y, cell_width, cell_height))
+
+            for vx in range(x, x + cell_width):
+                for vy in range(y, y + cell_height):
+                    added_verts.add((vx, vy))
+
+
+def draw_circle(x, y, radius, c, batch):
+    if radius not in circle_vertices:
+        generate_circle(radius)
+
+    for sx, sy, sw, sh in circle_vertices[radius]:
+        draw_sub_rect(x, y, sx, sy, sw, sh, c, batch)
+
+
+def distance(node1, node2):
+    return abs(node1.x - node2.x) + abs(node1.y - node2.y)
+
+
+def get_neighbors(node):
+    neighbors = []
+
+    for sy in range(-1, 2):
+        for sx in range(-1, 2):
+            if not abs(sx) == abs(sy) and 0 <= node.x + sx < board_width and 0 <= node.y < board_height and board[node.y + sy][node.x + sx] > 0:
+                neighbors.append(nodes[node.y + sy][node.x + sx])
+
+    return neighbors
+
+
+def get_path(path):
+    index = 0
+
+    for x, y in path.copy():
+        if index < len(path) - 1:
+            next_x, next_y = path[index + 1]
+
+            if x == next_x:
+                if y > next_y:
+                    path[index] = (x, y, 'U')
+                else:
+                    path[index] = (x, y, 'D')
+            else:
+                if x > next_x:
+                    path[index] = (x, y, 'L')
+                else:
+                    path[index] = (x, y, 'R')
+
+            index += 1
+
+    return path[:-1:]
+
+
+def a_star(initial, goal):
+    open_set = set()
+    closed_set = set()
+
+    current = initial
+    open_set.add(current)
+
+    while open_set:
+        current = min(open_set, key=lambda o: o.G + o.H)
+
+        if current.x == goal.x and current.y == goal.y:
+            path = []
+
+            while current.parent:
+                path.append((current.x, current.y))
+                current = current.parent
+
+            path.append((current.x, current.y))
+            return get_path(path[::-1])
+
+        open_set.remove(current)
+        closed_set.add(current)
+
+        for node in get_neighbors(current):
+            if node in closed_set:
+                continue
+
+            if node in open_set:
+                new_g = current.G + 1
+
+                if node.G > new_g:
+                    node.G = new_g
+                    node.parent = current
+            else:
+                node.G = current.G + 1
+                node.H = distance(node, goal)
+                node.parent = current
+                open_set.add(node)
+
+    raise ValueError('No Path Found')
 
 
 def parse_board():
@@ -262,37 +470,6 @@ def parse_board():
                             walls.add((x, y, 'bottom'))
 
 
-def draw_rect(x, y, c, batch):
-    r, g, b = c
-    padding_lt = 1
-    padding_rb = 1
-
-    batch.add(4, gl.GL_QUADS, None,
-              ('v2f', (x * scale + padding_lt, y * scale + padding_lt,
-                       x * scale + scale - padding_rb, y * scale + padding_lt,
-                       x * scale + scale - padding_rb, y * scale + scale - padding_rb,
-                       x * scale + padding_lt, y * scale + scale - padding_rb)),
-              ('c3f', (r, g, b, r, g, b, r, g, b, r, g, b)))
-
-
-def draw_sub_rect(x, y, sx, sy, sw, sh, c, batch):
-    r, g, b = c
-
-    batch.add(4, gl.GL_QUADS, None,
-              ('v2f', ((x * scale) + sx, (y * scale) + sy,
-                       (x * scale) + sx + sw, (y * scale) + sy,
-                       (x * scale) + sx + sw, (y * scale) + sy + sh,
-                       (x * scale) + sx, (y * scale) + sy + sh)),
-              ('c3f', (r, g, b, r, g, b, r, g, b, r, g, b)))
-
-
-def draw_circle(x, y, radius, tolerance, c, batch):
-    [draw_sub_rect(x, y, sx + radius + (scale / 2 - radius), sy + radius + (scale / 2 - radius), 1, 1, c, batch)
-     for sx in range(-radius, radius + 1)
-     for sy in range(-radius, radius + 1)
-     if (sx ** 2 + sy ** 2) ** 0.5 - radius <= tolerance]
-
-
 def draw_board():
     gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 
@@ -304,12 +481,12 @@ def draw_dots():
     for x, y, big in dots:
         if big:
             # [draw_sub_rect(x, height - y - 4, sx, sy, sw, sh, (1.0, 1.0, 0.0), dot_batch) for sx, sy, sw, sh in dot_vertices['big']]
-            draw_sub_rect(x, height - y - 4, 5, 5, 10, 10, (1.0, 1.0, 0.0), dot_batch)
-            # draw_circle(x, height - y - 4, 8, 0.5, (1.0, 1.0, 0.0), dot_batch)
+            # draw_sub_rect(x, height - y - 4, 5, 5, 10, 10, (1.0, 1.0, 0.0), dot_batch)
+            draw_circle(x, height - y - 4, 8, (1.0, 1.0, 0.0), dot_batch)
         else:
             # [draw_sub_rect(x, height - y - 4, sx, sy, sw, sh, (1.0, 1.0, 0.0), dot_batch) for sx, sy, sw, sh in dot_vertices['small']]
             draw_sub_rect(x, height - y - 4, 8, 8, 4, 4, (1.0, 1.0, 0.0), dot_batch)
-            # draw_circle(x, height - y - 4, 2, 0.5, (1.0, 1.0, 0.0), dot_batch)
+            # draw_circle(x, height - y - 4, 2, (1.0, 1.0, 0.0), dot_batch)
 
 
 def draw_lives():
@@ -340,6 +517,9 @@ def draw_ui():
 def game_loop(dt):
     pacman.move(dt)
     pacman.col_detect()
+
+    for enemy in enemies:
+        enemy.move(dt)
 
 
 @window.event
@@ -374,6 +554,11 @@ def on_draw():
     dot_batch.draw()
 
     pacman.draw()
+
+    for enemy in enemies:
+        enemy.draw()
+        # pass
+
     entity_batch.draw()
 
     entity_batch = pyglet.graphics.Batch()
@@ -390,6 +575,11 @@ def start(w=1280, h=720, s=20):
     scale = s
     width = floor(w / scale)
     height = floor(h / scale)
+
+    enemies.append(Enemy(14, 20, (1.0, 0.0, 0.0)))
+    enemies.append(Enemy(15, 20, (1.0, 0.75294, 0.79607)))
+    enemies.append(Enemy(14, 19, (0.0, 1.0, 1.0)))
+    enemies.append(Enemy(15, 19, (1.0, 1.0, 0.54901)))
 
     parse_board()
     draw_board()
