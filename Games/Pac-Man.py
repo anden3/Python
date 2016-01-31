@@ -12,6 +12,7 @@ scale = 0
 tolerance = 0.5
 
 game_paused = False
+power_up = False
 
 window = pyglet.window.Window()
 dot_batch = pyglet.graphics.Batch()
@@ -23,6 +24,7 @@ entity_batch = pyglet.graphics.Batch()
 pacman = None
 enemies = {}
 
+nodes = None
 dots = set()
 walls = set()
 intersections = {(15, 10, 'LR')}
@@ -106,6 +108,20 @@ text_positions = [
     (15, -2.8, 'S'), (16.2, -2.8, 'C'), (17.4, -2.8, 'O'), (18.6, -2.8, 'R'), (19.8, -2.8, 'E'),
 ]
 
+spawn_positions = {
+    'red': (14, 20),
+    'pink': (15, 20),
+    'cyan': (14, 19),
+    'orange': (15, 19)
+}
+
+ghost_colors = {
+    'red': (1.0, 0.0, 0.0),
+    'pink': (1.0, 0.75294, 0.79607),
+    'cyan': (0.0, 1.0, 1.0),
+    'orange': (1.0, 0.54901, 0.0)
+}
+
 circle_vertices = {}
 dot_vertex_lists = {}
 
@@ -166,23 +182,26 @@ class Pacman:
                     self.x = round(self.x)
 
     def col_detect(self):
-        global dot_batch
+        global dot_batch, power_up
 
         for color in enemies:
             enemy = enemies[color]
             if (abs((self.x + self.r) - (enemy.x + self.r)) ** 2 + abs((self.y + self.r) - (enemy.y + self.r))) ** 0.5 <= ((self.r + enemy.r) / scale):
-                if self.lives == 0:
-                    return game_over()
-                else:
-                    self.lives -= 1
-                    draw_lives()
+                if not power_up:
+                    if self.lives == 0:
+                        return game_over()
+                    else:
+                        self.lives -= 1
+                        draw_lives()
 
-                    return reset()
+                        return reset()
 
         for x, y, big in dots:
             if abs(self.x - x) < 0.3 and abs(self.y - y) < 0.3:
                 if big:
                     self.score += 50
+                    power_up = True
+                    pyglet.clock.schedule_once(disable_power_up, 10)
                 else:
                     self.score += 10
 
@@ -197,49 +216,52 @@ class Pacman:
 
 
 class Enemy:
-    def __init__(self, x, y, c, color):
-        self.x = x
-        self.y = y
+    def __init__(self, color):
+        self.x, self.y = spawn_positions[color]
         self.r = 14
-        self.c = c
         self.d = None
         self.speed = 2
         self.color = color
+        self.c = ghost_colors[self.color]
 
     def move(self, dt):
         goal = None
 
-        if self.color == 'red':
-            goal = Node(pacman.x, board_height + 1 - pacman.y)
-        elif self.color == 'pink' or self.color == 'cyan':
-            if pacman.d is not None:
-                goal_found = False
-                neighbors = get_neighbors(Node(round(pacman.x), round(board_height + 1 - pacman.y)))
+        if power_up:
+            goal = Node(spawn_positions[self.color][0], (board_height + 1) - spawn_positions[self.color][1])
+            self.c = (0.0, 0.0, 1.0)
+        else:
+            if self.color == 'red':
+                goal = Node(pacman.x, board_height + 1 - pacman.y)
+            elif self.color == 'pink' or self.color == 'cyan':
+                if pacman.d is not None:
+                    goal_found = False
+                    neighbors = get_neighbors(Node(round(pacman.x), round(board_height + 1 - pacman.y)))
 
-                if pacman.d == 'U':
-                    goal = (round(pacman.x), round(board_height - pacman.y))
-                elif pacman.d == 'D':
-                    goal = (round(pacman.x), round(board_height + 2 - pacman.y))
-                elif pacman.d == 'L':
-                    goal = (round(pacman.x - 1), round(board_height + 1 - pacman.y))
-                elif pacman.d == 'R':
-                    goal = (round(pacman.x + 1), round(board_height + 1 - pacman.y))
+                    if pacman.d == 'U':
+                        goal = (round(pacman.x), round(board_height - pacman.y))
+                    elif pacman.d == 'D':
+                        goal = (round(pacman.x), round(board_height + 2 - pacman.y))
+                    elif pacman.d == 'L':
+                        goal = (round(pacman.x - 1), round(board_height + 1 - pacman.y))
+                    elif pacman.d == 'R':
+                        goal = (round(pacman.x + 1), round(board_height + 1 - pacman.y))
 
-                for node in neighbors:
-                    if goal[0] == node.x and goal[1] == node.y:
-                        goal_found = True
-                        goal = Node(node.x, node.y)
-                        break
+                    for node in neighbors:
+                        if goal[0] == node.x and goal[1] == node.y:
+                            goal_found = True
+                            goal = Node(node.x, node.y)
+                            break
 
-                if not goal_found:
+                    if not goal_found:
+                        goal = Node(pacman.x, board_height + 1 - pacman.y)
+                else:
                     goal = Node(pacman.x, board_height + 1 - pacman.y)
-            else:
-                goal = Node(pacman.x, board_height + 1 - pacman.y)
-        elif self.color == 'orange':
-            if (abs(self.x - pacman.x) ** 2 + abs(self.y - pacman.y) ** 2) ** 0.5 <= 8:
-                goal = Node(2, 30)
-            else:
-                goal = Node(pacman.x, board_height + 1 - pacman.y)
+            elif self.color == 'orange':
+                if (abs(self.x - pacman.x) ** 2 + abs(self.y - pacman.y) ** 2) ** 0.5 <= 8:
+                    goal = Node(2, 30)
+                else:
+                    goal = Node(pacman.x, board_height + 1 - pacman.y)
 
         for x, y, d in a_star(Node(self.x, board_height + 1 - self.y), goal):
             if abs(self.x - x) < 0.3 and abs((board_height + 1 - self.y) - y) < 0.3:
@@ -271,7 +293,13 @@ class Node:
         self.H = 0
         self.G = 0
 
-nodes = [[Node(x, y) for x in range(board_width)] for y in range(board_height)]
+
+def disable_power_up(dt):
+    global power_up
+    power_up = False
+
+    for enemy in enemies:
+        enemy.c = ghost_colors[enemy.color]
 
 
 def draw_rect(x, y, c, batch):
@@ -634,22 +662,28 @@ def on_draw():
     entity_batch = pyglet.graphics.Batch()
 
 
-def start(w=1280, h=720, s=20):
+def start():
     gl.glClearColor(0.0, 0.0, 0.0, 1.0)
     gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 
+    global width, height, scale, pacman, nodes
+    pacman = Pacman()
+    scale = 20
+
+    w = board_width * scale
+    h = board_height * scale + 100
+
     window.set_size(w, h)
 
-    global width, height, scale, pacman
-    pacman = Pacman()
-    scale = s
     width = floor(w / scale)
     height = floor(h / scale)
 
-    enemies['red'] = (Enemy(14, 20, (1.0, 0.0, 0.0), 'red'))
-    enemies['pink'] = (Enemy(15, 20, (1.0, 0.75294, 0.79607), 'pink'))
-    enemies['cyan'] = (Enemy(14, 19, (0.0, 1.0, 1.0), 'cyan'))
-    enemies['orange'] = (Enemy(15, 19, (1.0, 0.54901, 0.0), 'orange'))
+    nodes = [[Node(x, y) for x in range(board_width)] for y in range(board_height)]
+
+    enemies['red'] = Enemy('red')
+    enemies['pink'] = Enemy('pink')
+    enemies['cyan'] = Enemy('cyan')
+    enemies['orange'] = Enemy('orange')
 
     parse_board()
     draw_board()
@@ -662,4 +696,4 @@ def start(w=1280, h=720, s=20):
 
     pyglet.app.run()
 
-start(w=board_width * 20, h=board_height * 20 + 100)
+start()
