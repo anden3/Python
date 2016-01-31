@@ -11,6 +11,8 @@ height = 0
 scale = 0
 tolerance = 0.5
 
+game_paused = False
+
 window = pyglet.window.Window()
 dot_batch = pyglet.graphics.Batch()
 stage_batch = pyglet.graphics.Batch()
@@ -19,7 +21,7 @@ life_batch = pyglet.graphics.Batch()
 entity_batch = pyglet.graphics.Batch()
 
 pacman = None
-enemies = []
+enemies = {}
 
 dots = set()
 walls = set()
@@ -97,10 +99,6 @@ text_vertices = {
     'S': [(0, 3, 6, 3), (3, 0, 15, 3), (15, 3, 5, 6), (3, 9, 15, 3), (0, 12, 6, 5), (3, 17, 12, 3), (12, 14, 6, 3)],
     'U': [(0, 3, 6, 17), (3, 0, 12, 3), (12, 3, 6, 17)],
 }
-dot_vertices = {
-    'big': [(7, 5, 6, 1), (5, 7, 1, 6), (6, 6, 8, 8), (14, 7, 1, 6), (7, 14, 6, 1)],
-    'small': [(9, 7, 2, 1), (7, 9, 1, 2), (8, 8, 4, 4), (12, 9, 1, 2), (9, 12, 2, 1)]
-}
 
 text_positions = [
     (3, -2.8, '1'), (4, -2.8, 'U'), (5.1, -2.8, 'P'),
@@ -109,6 +107,7 @@ text_positions = [
 ]
 
 circle_vertices = {}
+dot_vertex_lists = {}
 
 
 class Pacman:
@@ -121,9 +120,6 @@ class Pacman:
         self.speed = 3
         self.score = 0
         self.lives = 3
-
-    def set_direction(self, d):
-        self.d = d
 
     def move(self, dt):
         if self.d is not None and self.d in self.vd:
@@ -172,17 +168,26 @@ class Pacman:
     def col_detect(self):
         global dot_batch
 
+        for color in enemies:
+            enemy = enemies[color]
+            if (abs((self.x + self.r) - (enemy.x + self.r)) ** 2 + abs((self.y + self.r) - (enemy.y + self.r))) ** 0.5 <= ((self.r + enemy.r) / scale):
+                if self.lives == 0:
+                    return game_over()
+                else:
+                    self.lives -= 1
+                    draw_lives()
+
+                    return reset()
+
         for x, y, big in dots:
-            if abs(self.x - x) < 0.3 and abs((board_height + 1 - self.y) - y) < 0.3:
+            if abs(self.x - x) < 0.3 and abs(self.y - y) < 0.3:
                 if big:
                     self.score += 50
                 else:
                     self.score += 10
 
                 dots.discard((x, y, big))
-
-                dot_batch = pyglet.graphics.Batch()
-                draw_dots()
+                dot_vertex_lists[(x, y)].delete()
                 draw_score()
 
                 return
@@ -192,16 +197,51 @@ class Pacman:
 
 
 class Enemy:
-    def __init__(self, x, y, color):
+    def __init__(self, x, y, c, color):
         self.x = x
         self.y = y
         self.r = 14
-        self.c = color
+        self.c = c
         self.d = None
         self.speed = 2
+        self.color = color
 
     def move(self, dt):
-        for x, y, d in a_star(Node(self.x, board_height + 1 - self.y), Node(pacman.x, board_height + 1 - pacman.y)):
+        goal = None
+
+        if self.color == 'red':
+            goal = Node(pacman.x, board_height + 1 - pacman.y)
+        elif self.color == 'pink' or self.color == 'cyan':
+            if pacman.d is not None:
+                goal_found = False
+                neighbors = get_neighbors(Node(round(pacman.x), round(board_height + 1 - pacman.y)))
+
+                if pacman.d == 'U':
+                    goal = (round(pacman.x), round(board_height - pacman.y))
+                elif pacman.d == 'D':
+                    goal = (round(pacman.x), round(board_height + 2 - pacman.y))
+                elif pacman.d == 'L':
+                    goal = (round(pacman.x - 1), round(board_height + 1 - pacman.y))
+                elif pacman.d == 'R':
+                    goal = (round(pacman.x + 1), round(board_height + 1 - pacman.y))
+
+                for node in neighbors:
+                    if goal[0] == node.x and goal[1] == node.y:
+                        goal_found = True
+                        goal = Node(node.x, node.y)
+                        break
+
+                if not goal_found:
+                    goal = Node(pacman.x, board_height + 1 - pacman.y)
+            else:
+                goal = Node(pacman.x, board_height + 1 - pacman.y)
+        elif self.color == 'orange':
+            if (abs(self.x - pacman.x) ** 2 + abs(self.y - pacman.y) ** 2) ** 0.5 <= 8:
+                goal = Node(2, 30)
+            else:
+                goal = Node(pacman.x, board_height + 1 - pacman.y)
+
+        for x, y, d in a_star(Node(self.x, board_height + 1 - self.y), goal):
             if abs(self.x - x) < 0.3 and abs((board_height + 1 - self.y) - y) < 0.3:
                 self.d = d
                 break
@@ -220,7 +260,6 @@ class Enemy:
             self.y -= self.speed * dt
 
     def draw(self):
-        # draw_sub_rect(self.x, self.y, 2, 2, 16, 16, self.c, entity_batch)
         draw_circle(self.x, self.y, self.r, self.c, entity_batch)
 
 
@@ -251,12 +290,14 @@ def draw_rect(x, y, c, batch):
 def draw_sub_rect(x, y, sx, sy, sw, sh, c, batch):
     r, g, b = c
 
-    batch.add(4, gl.GL_QUADS, None,
-              ('v2f', ((x * scale) + sx, (y * scale) + sy,
-                       (x * scale) + sx + sw, (y * scale) + sy,
-                       (x * scale) + sx + sw, (y * scale) + sy + sh,
-                       (x * scale) + sx, (y * scale) + sy + sh)),
-              ('c3f', (r, g, b, r, g, b, r, g, b, r, g, b)))
+    batch.add(4, gl.GL_QUADS, None, (
+        'v2f', (
+            (x * scale) + sx, (y * scale) + sy,
+            (x * scale) + sx + sw, (y * scale) + sy,
+            (x * scale) + sx + sw, (y * scale) + sy + sh,
+            (x * scale) + sx, (y * scale) + sy + sh)
+    ), (
+        'c3f', (r, g, b, r, g, b, r, g, b, r, g, b)))
 
 
 def generate_circle(radius):
@@ -307,12 +348,24 @@ def generate_circle(radius):
                     added_verts.add((vx, vy))
 
 
-def draw_circle(x, y, radius, c, batch):
+def draw_circle(x, y, radius, c, batch, dot=False):
     if radius not in circle_vertices:
         generate_circle(radius)
 
-    for sx, sy, sw, sh in circle_vertices[radius]:
-        draw_sub_rect(x, y, sx, sy, sw, sh, c, batch)
+    if dot:
+        r, g, b = c
+
+        vertices = []
+        colors = []
+
+        for sx, sy, sw, sh in circle_vertices[radius]:
+            vertices.extend([(x * scale) + sx, (y * scale) + sy, (x * scale) + sx + sw, (y * scale) + sy, (x * scale) + sx + sw, (y * scale) + sy + sh, (x * scale) + sx, (y * scale) + sy + sh])
+            colors.extend([r, g, b, r, g, b, r, g, b, r, g, b])
+
+        dot_vertex_lists[(x, y)] = batch.add(len(circle_vertices[radius]) * 4, gl.GL_QUADS, None, ('v2f', vertices), ('c3f', colors))
+    else:
+        for sx, sy, sw, sh in circle_vertices[radius]:
+            draw_sub_rect(x, y, sx, sy, sw, sh, c, batch)
 
 
 def distance(node1, node2):
@@ -417,7 +470,7 @@ def parse_board():
                     intersections.add((x, y, directions))
 
             if board[y][x] == 1 or board[y][x] == 2:
-                dots.add((x, y, board[y][x] == 2))
+                dots.add((x, board_height + 1 - y, board[y][x] == 2))
 
             elif board[y][x] == 0:
                 if y > 0 and board[y - 1][x] == 0:                              # Bottom
@@ -480,13 +533,9 @@ def draw_board():
 def draw_dots():
     for x, y, big in dots:
         if big:
-            # [draw_sub_rect(x, height - y - 4, sx, sy, sw, sh, (1.0, 1.0, 0.0), dot_batch) for sx, sy, sw, sh in dot_vertices['big']]
-            # draw_sub_rect(x, height - y - 4, 5, 5, 10, 10, (1.0, 1.0, 0.0), dot_batch)
-            draw_circle(x, height - y - 4, 8, (1.0, 1.0, 0.0), dot_batch)
+            draw_circle(x, y, 8, (1.0, 1.0, 0.0), dot_batch, dot=True)
         else:
-            # [draw_sub_rect(x, height - y - 4, sx, sy, sw, sh, (1.0, 1.0, 0.0), dot_batch) for sx, sy, sw, sh in dot_vertices['small']]
-            draw_sub_rect(x, height - y - 4, 8, 8, 4, 4, (1.0, 1.0, 0.0), dot_batch)
-            # draw_circle(x, height - y - 4, 2, (1.0, 1.0, 0.0), dot_batch)
+            draw_circle(x, y, 2, (1.0, 1.0, 0.0), dot_batch, dot=True)
 
 
 def draw_lives():
@@ -514,30 +563,52 @@ def draw_ui():
         [draw_sub_rect(x, height - y - 4, sx, sy, sw, sh, (1.0, 1.0, 1.0), stage_batch) for sx, sy, sw, sh in text_vertices[c]]
 
 
+def reset():
+    enemies['red'].x, enemies['red'].y = 14, 20
+    enemies['pink'].x, enemies['pink'].y = 15, 20
+    enemies['cyan'].x, enemies['cyan'].y = 14, 19
+    enemies['orange'].x, enemies['orange'].y = 15, 19
+
+    pacman.x, pacman.y = 14.5, 10
+    pacman.vd = 'LR'
+    pacman.d = None
+
+
+def game_over():
+    pyglet.clock.unschedule(game_loop)
+    print("Game Over!")
+    sys.exit()
+
+
 def game_loop(dt):
     pacman.move(dt)
     pacman.col_detect()
 
     for enemy in enemies:
-        enemy.move(dt)
+        enemies[enemy].move(dt)
 
 
 @window.event
 def on_key_press(symbol, modifers):
     if symbol == key.LEFT:
         if 'L' in pacman.vd:
-            pacman.set_direction('L')
+            pacman.d = 'L'
     elif symbol == key.RIGHT:
         if 'R' in pacman.vd:
-            pacman.set_direction('R')
+            pacman.d = 'R'
     elif symbol == key.UP:
         if 'U' in pacman.vd:
-            pacman.set_direction('U')
+            pacman.d = 'U'
     elif symbol == key.DOWN:
         if 'D' in pacman.vd:
-            pacman.set_direction('D')
-    elif symbol == key.Q:
-        sys.exit()
+            pacman.d = 'D'
+    elif symbol == key.P:
+        global game_paused
+        game_paused = not game_paused
+        if game_paused:
+            pyglet.clock.unschedule(game_loop)
+        else:
+            pyglet.clock.schedule_interval(game_loop, 1 / 60)
 
 
 @window.event
@@ -556,8 +627,7 @@ def on_draw():
     pacman.draw()
 
     for enemy in enemies:
-        enemy.draw()
-        # pass
+        enemies[enemy].draw()
 
     entity_batch.draw()
 
@@ -576,10 +646,10 @@ def start(w=1280, h=720, s=20):
     width = floor(w / scale)
     height = floor(h / scale)
 
-    enemies.append(Enemy(14, 20, (1.0, 0.0, 0.0)))
-    enemies.append(Enemy(15, 20, (1.0, 0.75294, 0.79607)))
-    enemies.append(Enemy(14, 19, (0.0, 1.0, 1.0)))
-    enemies.append(Enemy(15, 19, (1.0, 1.0, 0.54901)))
+    enemies['red'] = (Enemy(14, 20, (1.0, 0.0, 0.0), 'red'))
+    enemies['pink'] = (Enemy(15, 20, (1.0, 0.75294, 0.79607), 'pink'))
+    enemies['cyan'] = (Enemy(14, 19, (0.0, 1.0, 1.0), 'cyan'))
+    enemies['orange'] = (Enemy(15, 19, (1.0, 0.54901, 0.0), 'orange'))
 
     parse_board()
     draw_board()
