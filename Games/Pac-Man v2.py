@@ -1,5 +1,4 @@
 import sys
-from random import choice
 
 import pyglet
 import pyglet.gl as gl
@@ -9,9 +8,11 @@ width = 0
 height = 0
 scale = 0
 tolerance = 0.5
+dot_counter = 0
 
 game_paused = False
 power_up = False
+scatter = True
 
 window = pyglet.window.Window(style=pyglet.window.Window.WINDOW_STYLE_BORDERLESS)
 dot_batch = pyglet.graphics.Batch()
@@ -23,9 +24,11 @@ entity_batch = pyglet.graphics.Batch()
 fps_display = pyglet.clock.ClockDisplay()
 
 pacman = None
+speeds = {}
 enemies = {}
 
-nodes = None
+active_ghosts = ['red', 'pink']
+
 dots = set()
 walls = set()
 intersections = {(15, 10, 'LR')}
@@ -44,11 +47,11 @@ board = [
     [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 3, 0, 0, 3, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 3, 0, 0, 3, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 3, 0, 0, 3, 3, 0, 0, 3, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 3, 0, 3, 3, 3, 3, 0, 3, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-    [3, 3, 3, 3, 3, 3, 3, 1, 3, 3, 3, 3, 0, 3, 3, 3, 3, 0, 3, 3, 3, 3, 1, 3, 3, 3, 3, 3, 3, 3],
-    [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 3, 0, 3, 3, 3, 3, 0, 3, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 0, 0, 0, 3, 0, 0, 0, 0, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 0, 0, 0, 3, 0, 0, 0, 0, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+    [3, 3, 3, 3, 3, 3, 0, 1, 3, 3, 3, 0, 0, 0, 3, 0, 0, 0, 0, 3, 3, 3, 1, 0, 3, 3, 3, 3, 3, 3],
+    [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
@@ -112,9 +115,16 @@ text_positions = [
 
 spawn_positions = {
     'red': (14, 20),
-    'pink': (15, 20),
-    'cyan': (14, 19),
-    'orange': (15, 19)
+    'pink': (14, 20),
+    'cyan': (14, 20),
+    'orange': (14, 20)
+}
+
+scatter_targets = {
+    'red': (29, 40),
+    'pink': (0, 40),
+    'cyan': (29, -5),
+    'orange': (0, -5)
 }
 
 ghost_colors = {
@@ -135,7 +145,7 @@ class Pacman:
         self.r = 14
         self.d = None
         self.vd = 'LR'
-        self.speed = 3
+        self.speed = 0.08
         self.score = 0
         self.lives = 3
         self.kills = 0
@@ -151,13 +161,13 @@ class Pacman:
 
                     if self.d in d:
                         if self.d == 'L':
-                            self.x -= self.speed * dt
+                            self.x -= self.speed * 1.2
                         elif self.d == 'R':
-                            self.x += self.speed * dt
+                            self.x += self.speed * 1.2
                         elif self.d == 'U':
-                            self.y += self.speed * dt
+                            self.y += self.speed * 1.2
                         elif self.d == 'D':
-                            self.y -= self.speed * dt
+                            self.y -= self.speed * 1.2
 
                     else:
                         self.x = x
@@ -166,22 +176,22 @@ class Pacman:
             if not at_intersection:
                 if self.d == 'L':
                     self.vd = 'LR'
-                    self.x -= self.speed * dt
+                    self.x -= self.speed
                     self.y = round(self.y)
 
                 elif self.d == 'R':
                     self.vd = 'LR'
-                    self.x += self.speed * dt
+                    self.x += self.speed
                     self.y = round(self.y)
 
                 elif self.d == 'U':
                     self.vd = 'UD'
-                    self.y += self.speed * dt
+                    self.y += self.speed
                     self.x = round(self.x)
 
                 elif self.d == 'D':
                     self.vd = 'UD'
-                    self.y -= self.speed * dt
+                    self.y -= self.speed
                     self.x = round(self.x)
 
     def col_detect(self):
@@ -206,7 +216,6 @@ class Pacman:
                     enemy.dead = True
                     enemy.c = (1.0, 1.0, 1.0)
                     enemy.r = 5
-                    enemy.goal = Node(spawn_positions[enemy.color][0], (board_height + 1) - spawn_positions[enemy.color][1])
 
                     self.kills += 1
                     self.score += 100 * (2 ** self.kills)
@@ -214,6 +223,14 @@ class Pacman:
 
         for x, y, big in dots:
             if abs(self.x - x) < 0.3 and abs(self.y - y) < 0.3:
+                global dot_counter
+                dot_counter += 1
+
+                if dot_counter >= 30 and len(active_ghosts) == 2:
+                    active_ghosts.append('cyan')
+                elif dot_counter >= 90 and len(active_ghosts) == 3:
+                    active_ghosts.append('orange')
+
                 if big:
                     self.score += 50
                     toggle_power_up(None, state=True)
@@ -235,103 +252,67 @@ class Pacman:
 class Enemy:
     def __init__(self, color):
         self.x, self.y = spawn_positions[color]
-        self.r = 14
-        self.d = None
-        self.speed = 2
+
         self.color = color
         self.c = ghost_colors[self.color]
-        self.goal = None
+
+        self.r = 14
+
         self.dead = False
 
+        self.d = 'U'
+        self.next_pos = [self.x, self.y]
+        self.next_d = None
+
     def move(self, dt):
-        goal = None
+        if abs(self.x - round(self.x)) < 0.05 and abs(self.y - round(self.y)) < 0.05:
+            self.x, self.y = round(self.x), round(self.y)
 
-        if not self.dead:
-            if power_up and self.goal is not None:
-                if abs(self.x - self.goal.x) <= 0.3 and abs(board_height + 1 - self.y - self.goal.y) <= 0.3:
-                    self.goal = get_random_node()
+            if scatter:
+                self.d = get_direction((self.x, self.y), scatter_targets[self.color], self.d)
+            else:
+                if self.color == 'red':
+                    self.d = get_direction((self.x, self.y), (pacman.x, pacman.y), self.d)
 
-            elif self.goal is not None:
-                if abs(self.x - self.goal.x) <= 0.3 and abs(board_height + 1 - self.y - self.goal.y) <= 0.3:
-                    self.goal = None
-
-        if self.goal is None:
-            if self.color == 'red':
-                goal = Node(pacman.x, board_height + 1 - pacman.y)
-            elif self.color == 'pink' or self.color == 'cyan':
-                if pacman.d is not None:
-                    goal_found = False
-                    neighbors = get_neighbors(Node(round(pacman.x), round(board_height + 1 - pacman.y)))
-
+                elif self.color == 'pink':
                     if pacman.d == 'U':
-                        goal = (round(pacman.x), round(board_height - pacman.y))
+                        self.d = get_direction((self.x, self.y), (pacman.x, pacman.y + 4), self.d)
                     elif pacman.d == 'D':
-                        goal = (round(pacman.x), round(board_height + 2 - pacman.y))
-                    elif pacman.d == 'L':
-                        goal = (round(pacman.x - 1), round(board_height + 1 - pacman.y))
+                        self.d = get_direction((self.x, self.y), (pacman.x, pacman.y - 4), self.d)
                     elif pacman.d == 'R':
-                        goal = (round(pacman.x + 1), round(board_height + 1 - pacman.y))
+                        self.d = get_direction((self.x, self.y), (pacman.x + 4, pacman.y), self.d)
+                    elif pacman.d == 'L':
+                        self.d = get_direction((self.x, self.y), (pacman.x - 4, pacman.y), self.d)
+                    else:
+                        self.d = get_direction((self.x, self.y), (pacman.x, pacman.y), self.d)
 
-                    for node in neighbors:
-                        if goal[0] == node.x and goal[1] == node.y:
-                            goal_found = True
-                            goal = Node(node.x, node.y)
-                            break
+                elif self.color == 'cyan':
+                    self.d = get_direction((self.x, self.y), (pacman.x + (pacman.x - enemies['pink'].x), pacman.y + (pacman.y - enemies['pink'].y)), self.d)
 
-                    if not goal_found:
-                        goal = Node(pacman.x, board_height + 1 - pacman.y)
-                else:
-                    goal = Node(pacman.x, board_height + 1 - pacman.y)
-            elif self.color == 'orange':
-                if (abs(self.x - pacman.x) ** 2 + abs(self.y - pacman.y) ** 2) ** 0.5 <= 8:
-                    goal = Node(2, 30)
-                else:
-                    goal = Node(pacman.x, board_height + 1 - pacman.y)
+                elif self.color == 'orange':
+                    if distance((self.x, self.y), (pacman.x, pacman.y)) > 8:
+                        self.d = get_direction((self.x, self.y), (pacman.x, pacman.y), self.d)
+                    else:
+                        self.d = get_direction((self.x, self.y), (2, 4), self.d)
 
-        if self.goal is not None:
-            goal = self.goal
+                if (self.x, self.y) == spawn_positions[self.color]:
+                    self.d = 'U'
 
-        for node, d in a_star(Node(self.x, board_height + 1 - self.y), goal):
-            if abs(self.x - node.x) < 0.3 and abs((board_height + 1 - self.y) - node.y) < 0.3:
-                self.d = d
-                break
-
-        if self.d == 'L':
-            self.y = round(self.y)
-            self.x -= self.speed * dt
-        elif self.d == 'R':
-            self.y = round(self.y)
-            self.x += self.speed * dt
-        elif self.d == 'U':
-            self.x = round(self.x)
-            self.y += self.speed * dt
-        elif self.d == 'D':
-            self.x = round(self.x)
-            self.y -= self.speed * dt
+        self.x, self.y = [x + y for x, y in zip([self.x, self.y], speeds[self.d])]
 
     def draw(self):
         draw_circle(self.x, self.y, self.r, self.c, entity_batch)
 
 
-class Node:
-    def __init__(self, x, y):
-        self.x = round(x)
-        self.y = round(y)
-        self.parent = None
-        self.H = 0
-        self.G = 0
-
-
-def get_random_node():
-    node = choice(choice(nodes))
-
-    if board[node.y][node.x] != 0:
-        if (abs(node.x - pacman.x) ** 2 + abs(board_height + 1 - node.y - pacman.y) ** 2) ** 0.5 >= 20:
-            return Node(node.x, node.y)
-        else:
-            return get_random_node()
-    else:
-        return get_random_node()
+def set_speeds(speed):
+    global speeds
+    speeds = {
+        'U': [0, speed],
+        'D': [0, -speed],
+        'L': [-speed, 0],
+        'R': [speed, 0],
+        None: [0, 0]
+    }
 
 
 def toggle_power_up(dt, state=False):
@@ -339,19 +320,30 @@ def toggle_power_up(dt, state=False):
     power_up = state
 
     if power_up:
+        set_speeds(0.05)
+
         for enemy in enemies:
             if enemies[enemy].c != (1.0, 1.0, 1.0):
                 enemies[enemy].c = (0.0, 0.0, 1.0)
 
-            if not enemies[enemy].dead:
-                enemies[enemy].goal = get_random_node()
-
     else:
+        set_speeds(0.075)
+
         for enemy in enemies:
             enemies[enemy].c = ghost_colors[enemies[enemy].color]
             enemies[enemy].r = 14
-            enemies[enemy].goal = None
             enemies[enemy].dead = False
+
+
+def toggle_mode(dt):
+    global scatter
+
+    if scatter:
+        scatter = False
+        pyglet.clock.schedule_once(toggle_mode, 7)
+    else:
+        scatter = True
+        pyglet.clock.schedule_once(toggle_mode, 20)
 
 
 def draw_rect(x, y, c, batch):
@@ -448,84 +440,61 @@ def draw_circle(x, y, radius, c, batch, dot=False):
             draw_sub_rect(x, y, sx, sy, sw, sh, c, batch)
 
 
-def distance(node1, node2):
-    return abs(node1.x - node2.x) + abs(node1.y - node2.y)
+def distance(a, b):
+    return (abs(a[0] - b[0]) + abs(a[1] - b[1])) ** 0.5
 
 
-def get_neighbors(node):
+def get_direction(pos, goal, direction):
     neighbors = []
+    pos, goal = (round(pos[0]), round(board_height + 1 - pos[1])), (round(goal[0]), round(board_height + 1 - goal[1]))
 
-    for sy in range(-1, 2):
-        for sx in range(-1, 2):
-            if not abs(sx) == abs(sy) and 0 <= node.x + sx < board_width and 0 <= node.y + sy < board_height and board[node.y + sy][node.x + sx] > 0:
-                neighbors.append(nodes[node.y + sy][node.x + sx])
+    for y in range(-1, 2):
+        for x in range(-1, 2):
+            if abs(x) != abs(y) and 0 <= pos[0] + x < board_width and 0 <= pos[1] + y < board_height and board[pos[1] + y][pos[0] + x] > 0:
+                next_dir = direction
 
-    return neighbors
+                if x == 1:
+                    if direction == 'L':
+                        continue
+                    next_dir = 'R'
 
+                elif x == -1:
+                    if direction == 'R':
+                        continue
+                    next_dir = 'L'
 
-def get_path(path):
-    index = 0
+                elif y == 1:
+                    if direction == 'U':
+                        continue
+                    next_dir = 'D'
 
-    for node in path.copy():
-        if index < len(path) - 1:
-            next_node = path[index + 1]
+                elif y == -1:
+                    if direction == 'D':
+                        continue
+                    next_dir = 'U'
 
-            if node.x == next_node.x:
-                if node.y > next_node.y:
-                    path[index] = (node, 'U')
-                else:
-                    path[index] = (node, 'D')
-            else:
-                if node.x > next_node.x:
-                    path[index] = (node, 'L')
-                else:
-                    path[index] = (node, 'R')
+                neighbors.append((next_dir, distance((pos[0] + x, pos[1] + y), goal)))
 
-            index += 1
+    smallest_dist = min(neighbors, key=lambda l: l[1])
+    matches = []
+    directions = []
 
-    return path[:-1:]
+    for neighbor in neighbors:
+        if neighbor[1] == smallest_dist[1]:
+            matches.append(neighbor)
+            directions.append(neighbor[0])
 
-
-def a_star(initial, goal):
-    open_set = set()
-    closed_set = set()
-
-    current = initial
-    open_set.add(current)
-
-    while open_set:
-        current = min(open_set, key=lambda o: o.G + o.H)
-
-        if current.x == goal.x and current.y == goal.y:
-            path = []
-
-            while current.parent:
-                path.append(current)
-                current = current.parent
-
-            path.append(current)
-            return get_path(path[::-1])
-
-        open_set.remove(current)
-        closed_set.add(current)
-
-        for node in get_neighbors(current):
-            if node in closed_set:
-                continue
-
-            if node in open_set:
-                new_g = current.G + 1
-
-                if node.G > new_g:
-                    node.G = new_g
-                    node.parent = current
-            else:
-                node.G = current.G + 1
-                node.H = distance(node, goal)
-                node.parent = current
-                open_set.add(node)
-
-    raise ValueError('No Path Found')
+    if len(matches) > 1:
+        if 'U' in directions:
+            return 'U'
+        if 'L' in directions:
+            return 'L'
+        if 'D' in directions:
+            return 'D'
+        if 'R' in directions:
+            return 'R'
+    else:
+        return smallest_dist[0]
 
 
 def parse_board():
@@ -644,10 +613,9 @@ def draw_ui():
 
 
 def reset():
-    enemies['red'].x, enemies['red'].y = 14, 20
-    enemies['pink'].x, enemies['pink'].y = 15, 20
-    enemies['cyan'].x, enemies['cyan'].y = 14, 19
-    enemies['orange'].x, enemies['orange'].y = 15, 19
+    for enemy in enemies:
+        enemies[enemy].x, enemies[enemy].y = spawn_positions[enemy]
+        enemies[enemy].d = 'U'
 
     pacman.x, pacman.y = 14.5, 10
     pacman.vd = 'LR'
@@ -664,7 +632,7 @@ def game_loop(dt):
     pacman.move(dt)
     pacman.col_detect()
 
-    for enemy in enemies:
+    for enemy in active_ghosts:
         enemies[enemy].move(dt)
 
 
@@ -673,15 +641,19 @@ def on_key_press(symbol, modifers):
     if symbol == key.LEFT:
         if 'L' in pacman.vd:
             pacman.d = 'L'
+
     elif symbol == key.RIGHT:
         if 'R' in pacman.vd:
             pacman.d = 'R'
+
     elif symbol == key.UP:
         if 'U' in pacman.vd:
             pacman.d = 'U'
+
     elif symbol == key.DOWN:
         if 'D' in pacman.vd:
             pacman.d = 'D'
+
     elif symbol == key.P:
         global game_paused
         game_paused = not game_paused
@@ -720,7 +692,7 @@ def start():
     gl.glClearColor(0.0, 0.0, 0.0, 1.0)
     gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 
-    global width, height, scale, pacman, nodes
+    global width, height, scale, pacman
     pacman = Pacman()
     scale = 20
 
@@ -734,8 +706,6 @@ def start():
     width = w // scale
     height = h // scale
 
-    nodes = [[Node(x, y) for x in range(board_width)] for y in range(board_height)]
-
     enemies['red'] = Enemy('red')
     enemies['pink'] = Enemy('pink')
     enemies['cyan'] = Enemy('cyan')
@@ -747,7 +717,9 @@ def start():
     draw_ui()
     draw_score()
     draw_lives()
+    set_speeds(0.075)
 
+    pyglet.clock.schedule_once(toggle_mode, 7)
     pyglet.clock.schedule_interval(game_loop, 1 / 60)
 
     pyglet.app.run()
