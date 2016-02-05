@@ -100,8 +100,6 @@ def flood_fill():
         for y in range(lowest_point, y_values[x]):
             verts.append((x, y))
 
-    verts.sort(key=lambda l: l[1])
-
     for x, y in verts:
         count += 1
         print(str(count) + " of " + str(len(verts)))
@@ -164,8 +162,8 @@ def start():
     gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 
     window.set_size(width, height)
-    x, y = window.get_location()
-    window.set_location(x, y - 150)
+    # x, y = window.get_location()
+    # window.set_location(x, y - 150)
 
     t1 = perf_counter()
 
