@@ -216,6 +216,7 @@ pip-log.txt
 .mr.developer.cfg
 
 ## PyCharm
-/Misc/saved.html
 .idea/
+*.xml
+*.txt
 Games/save_file.txt
