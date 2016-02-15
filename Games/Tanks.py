@@ -1,5 +1,6 @@
 import math
 import random
+from time import time
 
 import pyglet
 import pyglet.gl as gl
@@ -11,7 +12,7 @@ height = 800
 gravity = 10
 air_resistance = 0.01
 friction_coefficient = 0.03
-grass_height = 5
+fire_delay = 0.1
 
 window = pyglet.window.Window()
 keys = key.KeyStateHandler()
@@ -48,14 +49,13 @@ cannon_rects = [
 shells = []
 labels = []
 
+circle_cols = {}
+
 
 class Tank:
     def __init__(self):
         self.x = random.randint(5, width - 16)
-        self.y = y_values[self.x] + grass_height
-
-        self.angle_x = self.x
-        self.angle_y = self.y
+        self.y = y_values[self.x]
 
         self.vx = 100
         self.vy = -1
@@ -80,6 +80,8 @@ class Tank:
         self.batch = pyglet.graphics.Batch()
         self.cannon_batch = pyglet.graphics.Batch()
 
+        self.last_fire = 0
+
         self.draw()
 
     def move(self, dx, dy):
@@ -97,54 +99,33 @@ class Tank:
         self.vx += dx * math.cos(math.radians(self.angle)) + dy * -math.sin(math.radians(self.angle))
         self.vy += dx * math.sin(math.radians(self.angle)) + dy * math.cos(math.radians(self.angle))
 
-    def check_angle(self):
-        if self.on_ground:
-            new_angle = angles[round(self.x)]
-            self.cannon_angle += new_angle - self.angle
-            self.angle = new_angle
-        else:
-            self.angle = 0
-
-    def get_corners(self):
-        x, y = (self.x + self.width, self.y + self.height)
-        cx, cy = self.x + (self.width / 2), self.y + (self.height / 2)
-        angle = math.radians(180 - abs(self.angle))
-
-        self.angle_x = cx + (x - cx) * math.cos(angle) + (y - cy) * math.sin(angle)
-        self.angle_y = cy - (x - cx) * math.sin(angle) + (y - cy) * math.cos(angle)
-
     def check_ground(self):
-        x, y = self.angle_x, self.angle_y - grass_height
+        x_vals = [self.x, self.x + self.width / 2, self.x + self.width]
+        diffs = [self.y - y_values[round(x)] for x in x_vals if 0 <= x < width]
+        min_diff = min(diffs)
 
-        if 0 <= x < width:
-            if y == y_values[round(x)] + grass_height:
-                self.on_ground = True
+        self.on_ground = min_diff <= 0
 
-            elif y < y_values[round(x)] + grass_height:
-                self.on_ground = True
+        if min_diff <= 0:
+            self.y -= min_diff
+            self.vy = 0
 
-                if self.vx < 0 and 270 <= self.angle <= 360 - self.max_angle:
-                    self.x += 1
-                    self.vx = 0
+            for diff in diffs:
+                diff -= min_diff
 
-                elif self.vx > 0 and self.max_angle <= self.angle <= 90:
-                    self.x -= 1
-                    self.vx = 0
+            if len(diffs) > 2:
+                angle = math.degrees(math.atan2(diffs[0] - diffs[2], self.width))
 
-                else:
-                    self.y += (y_values[round(x)]) - y
+                if angle < 0:
+                    angle += 360
 
-            else:
-                self.on_ground = False
+                self.cannon_angle += angle - self.angle
+                self.angle = angle
 
     def get_normal(self):
         return self.mass * gravity * abs(math.cos(math.radians(180 - abs(self.angle - 180))))
 
     def update(self, dt):
-        self.check_angle()
-        self.get_corners()
-        self.check_ground()
-
         if self.vy < 0:
             if self.on_ground:
                 self.vy = 0
@@ -183,13 +164,19 @@ class Tank:
         self.x += self.vx * dt
         self.y += self.vy * dt
 
+        self.check_ground()
+
         self.draw()
 
     def fire(self):
-        shells.append(Shell(self.x + cannon_rects[0][0] + (cannon_rects[0][2] / 2),
-                            self.y + cannon_rects[0][1] + cannon_rects[0][3],
-                            math.cos(math.radians(self.cannon_angle)),
-                            math.sin(math.radians(self.cannon_angle))))
+        now = time()
+
+        if now - self.last_fire >= fire_delay:
+            self.last_fire = now
+            shells.append(Shell(self.x + cannon_rects[0][0] + (cannon_rects[0][2] / 2),
+                                self.y + cannon_rects[0][1] + cannon_rects[0][3],
+                                math.cos(math.radians(self.cannon_angle)),
+                                math.sin(math.radians(self.cannon_angle))))
 
     def draw(self):
         for x, y, w, h in tank_rects:
@@ -239,6 +226,42 @@ class Shell:
         self.vx = vx * self.speed
         self.vy = vy * self.speed
 
+        self.explosion_radius = 20
+
+        if len(circle_cols) <= 0:
+            self.gen_circle()
+
+    def gen_circle(self, tolerance=0.5):
+        for x in range(-self.explosion_radius, self.explosion_radius + 1):
+            start_y = None
+            length = 0
+
+            for y in range(-self.explosion_radius, self.explosion_radius + 1):
+                if math.sqrt(x ** 2 + y ** 2) - self.explosion_radius <= tolerance:
+                    if start_y is None:
+                        start_y = y
+                    length += 1
+                else:
+                    if start_y is not None:
+                        circle_cols[x] = (start_y, length)
+                        break
+
+            if circle_cols.setdefault(x, None) is None:
+                circle_cols[x] = (0, 0)
+
+    def explode(self):
+        for x in range(round(self.x - self.explosion_radius - 15), round(self.x + self.explosion_radius + 15)):
+            if 0 <= x <= width - 1:
+                if circle_cols.setdefault(round(x - self.x), None) is not None:
+                    draw_rect(x, 0, 1, height, (0.529, 0.807, 0.921, 1.0), terrain)
+                    y_values[x] -= circle_cols[round(x - self.x)][1]
+
+        smooth_curve(begin=round(self.x - self.explosion_radius - 5), end=round(self.x + self.explosion_radius + 50))
+
+        for x in range(round(self.x - self.explosion_radius - 15), round(self.x + self.explosion_radius + 15)):
+            if 0 <= x <= width - 1:
+                draw_rect(x, 0, 1, y_values[x], (0.470, 0.282, 0.0, 1.0), terrain)
+
 
 def draw_shells(dt):
     global shell_batch
@@ -255,11 +278,8 @@ def draw_shells(dt):
             shells.remove(shell)
             continue
 
-        if shell.y - (y_values[round(shell.x)] + grass_height) < 0:
-            draw_rect(round(shell.x) - 2, y_values[round(shell.x) + grass_height], 5, 50, (0.529, 0.807, 0.921, 1.0), terrain)
-
-            for y in range(y_values[round(shell.x)] - 1, y_values[round(shell.x)] + 2):
-                y_values[round(shell.x)] -= 2
+        if shell.y - (y_values[round(shell.x)]) < 0:
+            shell.explode()
 
             shells.remove(shell)
             continue
@@ -308,7 +328,7 @@ def midpoint_algorithm(min_y, max_y, step, iterations):
         max_y /= step
 
 
-def bresenham(x0, y0, x1, y1):
+def generate_heightmap(x0, y0, x1, y1):
     dx = x1 - x0
     dy = y1 - y0
     error = 0
@@ -318,12 +338,9 @@ def bresenham(x0, y0, x1, y1):
         if x not in x_values:
             x_values.add(x)
             y_values[round(x)] = round(y)
-
-            draw_rect(round(x), round(y), 1, grass_height, (0.0, 0.31372, 0.0, 1.0), terrain)
             error += abs(dy / dx)
 
             while error >= 0.5:
-                draw_rect(round(x), round(y), 1, grass_height, (0.0, 0.31372, 0.0, 1.0), terrain)
                 y += math.copysign(1, (y1 - y0))
                 error -= 1
 
@@ -331,7 +348,25 @@ def bresenham(x0, y0, x1, y1):
 def print_lines():
     for i, x in enumerate(line_x):
         if i < len(line_x) - 1:
-            bresenham(x, y_values[x], line_x[i + 1], y_values[line_x[i + 1]])
+            generate_heightmap(x, y_values[x], line_x[i + 1], y_values[line_x[i + 1]])
+
+
+def smooth_curve(begin=0, end=width, iterations=5, avg_range=5):
+    for i in range(iterations):
+        y_copy = y_values
+
+        for x in range(begin, end):
+            x1, x2 = x - avg_range, x + avg_range
+
+            if x < avg_range:
+                x1 = 0
+            if x > width - avg_range - 1:
+                x2 = width - 1
+
+            avg_vals = [y_copy[cx] for cx in range(x1, x2)]
+
+            if len(avg_vals) > 0:
+                y_values[x] = round(sum(avg_vals) / len(avg_vals))
 
 
 def line_fill():
@@ -343,18 +378,8 @@ def draw_text():
     labels.append(pyglet.text.Label('Fuel', x=10, y=height - 30, color=(0, 0, 0, 255)))
 
 
-def get_angles():
-    for x1 in range(0, width - tank1.width):
-        x2 = x1 + tank1.width
-        y1, y2 = y_values[x1], y_values[x2]
-
-        slope = (y2 - y1) / (x2 - x1)
-        angle = math.degrees(math.acos(tank1.width / math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)))
-
-        if slope < 0:
-            angle = 360 - angle
-
-        angles[x1] = angle
+def distance(x1, y1, x2, y2):
+    return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
 
 @window.event
@@ -398,6 +423,11 @@ def check_keys():
     if keys[key.SPACE]:
         tank1.fire()
 
+    if keys[key.Z]:
+        global terrain
+        terrain = pyglet.graphics.Batch()
+        line_fill()
+
 
 def game_loop(dt):
     check_keys()
@@ -418,16 +448,16 @@ def start():
 
     midpoint_algorithm(-50, 50, 1.3, 7)
     print_lines()
+    smooth_curve()
     line_fill()
 
     draw_text()
 
     tank1 = Tank()
 
-    get_angles()
+    # get_angles()
 
     pyglet.clock.schedule_interval(game_loop, 1 / 120)
-
     pyglet.app.run()
 
 
