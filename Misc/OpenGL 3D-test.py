@@ -29,65 +29,60 @@ cube_normals = [
 
 
 def init():
-    global terrain_vertices_vbo, terrain_colors_vbo, terrain_normals_vbo
+    global terrain
 
-    light_pos = (GLfloat * 4)(0, 100, 0, 0)
-    mat_specular = (GLfloat * 4)(1, 1, 1, 1)
+    glClearColor(0.0, 0.0, 0.0, 1.0)
+    glClearDepth(1.0)
 
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
     glDepthFunc(GL_LEQUAL)
-
-    glLightfv(GL_LIGHT0, GL_POSITION, light_pos)
-    glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular)
-    glMaterialf(GL_FRONT, GL_SHININESS, 50.0)
-    glEnable(GL_LIGHTING)
-    glEnable(GL_LIGHT0)
-
-    glClearColor(0.0, 0.0, 0.0, 1.0)
-    glClearDepth(1.0)
 
     glEnable(GL_DEPTH_TEST)
     glDepthFunc(GL_LEQUAL)
     glShadeModel(GL_SMOOTH)
     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST)
 
-    generate_terrain(100, 100, 10)
+    generate_terrain(200, 200, 3)
 
-    terrain_vertices_vbo = VBO()
-    terrain_vertices_vbo.data(terrain_vertices)
-
-    terrain_colors_vbo = VBO()
-    terrain_colors_vbo.data(terrain_colors)
-
-    terrain_normals_vbo = VBO()
-    terrain_normals_vbo.data(terrain_normals)
+    terrain = VBO()
+    terrain.data(terrain_vertices, "vertex")
+    terrain.data(terrain_colors, "color")
+    terrain.data(terrain_normals, "normal")
 
 
 class VBO:
     def __init__(self):
-        self.buffer = GLuint(0)
-        glGenBuffers(1, self.buffer)
+        self.buffer_vertex = GLuint(0)
+        self.buffer_color = GLuint(0)
+        self.buffer_normal = GLuint(0)
 
-    def data(self, data):
-        data_gl = (GLfloat * len(data))(*data)
+        glGenBuffers(1, self.buffer_vertex)
+        glGenBuffers(1, self.buffer_color)
+        glGenBuffers(1, self.buffer_normal)
 
-        glBindBuffer(GL_ARRAY_BUFFER, self.buffer)
+    def data(self, data, buffer_type):
+        data_gl = to_gl_float(data)
+
+        if buffer_type == "vertex":
+            glBindBuffer(GL_ARRAY_BUFFER, self.buffer_vertex)
+        elif buffer_type == "color":
+            glBindBuffer(GL_ARRAY_BUFFER, self.buffer_color)
+        elif buffer_type == "normal":
+            glBindBuffer(GL_ARRAY_BUFFER, self.buffer_normal)
+
         glBufferData(GL_ARRAY_BUFFER, len(data) * 4, data_gl, GL_STATIC_DRAW)
 
-    def bind(self):
-        glBindBuffer(GL_ARRAY_BUFFER, self.buffer)
-
     def vertex(self):
-        self.bind()
+        glBindBuffer(GL_ARRAY_BUFFER, self.buffer_vertex)
         glVertexPointer(3, GL_FLOAT, 0, 0)
 
     def color(self):
-        self.bind()
+        glBindBuffer(GL_ARRAY_BUFFER, self.buffer_color)
         glColorPointer(4, GL_FLOAT, 0, 0)
 
     def normal(self):
-        self.bind()
+        glBindBuffer(GL_ARRAY_BUFFER, self.buffer_normal)
         glNormalPointer(GL_FLOAT, 0, 0)
 
 
@@ -157,15 +152,29 @@ class Camera(object):
         glRotatef(self.rz, 0, 0, 1)
 
 
+def to_gl_float(data):
+    return (GLfloat * len(data))(*data)
+
+
 def generate_terrain(width, depth, height_multiplier):
     for x in range(-(width // 2), width // 2):
         for z in range(-(depth // 2), width // 2):
-            add_cube((x, noise.snoise2(x, z) * height_multiplier, z), (1.0, 1.0, 1.0), (0.0, 0.0, 1.0, 1.0), terrain_vertices, terrain_colors, terrain_normals)
+            cube_height = noise.snoise2(x / 20, z / 20)
+            cube_color = None
+
+            if -1.0 <= cube_height < -0.33:
+                cube_color = (0.0, 0.0, 1.0, 1.0)
+            elif -0.33 <= cube_height < 0.33:
+                cube_color = (0.0, 1.0, 0.0, 1.0)
+            elif 0.33 <= cube_height <= 1.0:
+                cube_color = (1.0, 0.0, 0.0, 1.0)
+
+            add_cube((x, round(cube_height * height_multiplier), z), (1.0, 1.0, 1.0), cube_color, terrain_vertices, terrain_colors, terrain_normals)
 
 
 def add_cube(pos, scale, color, verts, cols, norms):
     x, y, z = pos
-    w, h, d = scale
+    w, h, d = scale[0] / 2, scale[1] / 2, scale[2] / 2
     r, g, b, a = color
 
     vertices = []
@@ -177,15 +186,25 @@ def add_cube(pos, scale, color, verts, cols, norms):
     for sx, sy, sz in cube_signs:
         vertices.extend([x + (w * sx), y + (h * sy), z + (d * sz)])
         colors.extend([r, g, b, a])
-
-        if index % 4 == 0:
-            normals.extend([*cube_normals[index // 4]])
+        normals.extend([*cube_normals[index // 4]])
 
         index += 1
 
     verts.extend(vertices)
     cols.extend(colors)
     norms.extend(normals)
+
+
+def render_light(pos, angle):
+    glLightfv(GL_LIGHT0, GL_AMBIENT, to_gl_float((0.2, 0.2, 0.2, 1.0)))
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, to_gl_float((1, 1, 1, 1.0)))
+    glLightfv(GL_LIGHT0, GL_SPECULAR, to_gl_float((0.5, 0.5, 0.5, 1.0)))
+
+    glLightfv(GL_LIGHT0, GL_POSITION, to_gl_float((*pos, 0)))
+    glLightfv(GL_LIGHT0, GL_SPOT_CUTOFF, to_gl_float([angle]))
+    glLightfv(GL_LIGHT0, GL_SPOT_DIRECTION, to_gl_float((0, -1, 0)))
+
+    glEnable(GL_LIGHT0)
 
 
 class CameraWindow(pyglet.window.Window):
@@ -204,14 +223,20 @@ class CameraWindow(pyglet.window.Window):
         self.cam.apply()
 
         glEnable(GL_DEPTH_TEST)
+        glEnable(GL_LIGHTING)
+
+        render_light((0, 10, 0), 45)
+
+        glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE)
+        glEnable(GL_COLOR_MATERIAL)
 
         glEnableClientState(GL_VERTEX_ARRAY)
         glEnableClientState(GL_COLOR_ARRAY)
         glEnableClientState(GL_NORMAL_ARRAY)
 
-        terrain_vertices_vbo.vertex()
-        terrain_colors_vbo.color()
-        terrain_normals_vbo.normal()
+        terrain.vertex()
+        terrain.color()
+        terrain.normal()
 
         glDrawArrays(GL_QUADS, 0, len(terrain_vertices) // 3)
 
