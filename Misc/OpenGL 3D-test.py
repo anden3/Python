@@ -1,9 +1,20 @@
+import math
+
 import noise
+import numpy
 import pyglet
 from pyglet.gl import *
 from pyglet.window import key
 
 fps_display = pyglet.clock.ClockDisplay()
+
+chunks = {}
+active_chunks = {}
+
+chunk_size = 10
+height_multiplier = 30
+zoom = 100
+render_distance = 500
 
 cube_signs = [
     (-1, 1, -1), (-1, 1, 1), (1, 1, 1), (1, 1, -1),         # Top
@@ -13,10 +24,6 @@ cube_signs = [
     (-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1),         # Front
     (1, -1, -1), (-1, -1, -1), (-1, 1, -1), (1, 1, -1)      # Back
 ]
-
-terrain_vertices = []
-terrain_colors = []
-terrain_normals = []
 
 cube_normals = [
     (0.0, 1.0, 0.0),      # Top
@@ -29,8 +36,6 @@ cube_normals = [
 
 
 def init():
-    global terrain
-
     glClearColor(0.0, 0.0, 0.0, 1.0)
     glClearDepth(1.0)
 
@@ -43,12 +48,7 @@ def init():
     glShadeModel(GL_SMOOTH)
     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST)
 
-    generate_terrain(200, 200, 3)
-
-    terrain = VBO()
-    terrain.data(terrain_vertices, "vertex")
-    terrain.data(terrain_colors, "color")
-    terrain.data(terrain_normals, "normal")
+    generate_terrain(200, 200)
 
 
 class VBO:
@@ -156,10 +156,16 @@ def to_gl_float(data):
     return (GLfloat * len(data))(*data)
 
 
-def generate_terrain(width, depth, height_multiplier):
-    for x in range(-(width // 2), width // 2):
-        for z in range(-(depth // 2), width // 2):
-            cube_height = noise.snoise2(x / 20, z / 20)
+def generate_chunk(cx, cz):
+    c_vertices = []
+    c_colors = []
+    c_normals = []
+
+    for sx in range(chunk_size):
+        for sz in range(chunk_size):
+            x = sx + cx * chunk_size
+            z = sz + cz * chunk_size
+            cube_height = noise.snoise2(x / zoom, z / zoom)
             cube_color = None
 
             if -1.0 <= cube_height < -0.33:
@@ -169,7 +175,26 @@ def generate_terrain(width, depth, height_multiplier):
             elif 0.33 <= cube_height <= 1.0:
                 cube_color = (1.0, 0.0, 0.0, 1.0)
 
-            add_cube((x, round(cube_height * height_multiplier), z), (1.0, 1.0, 1.0), cube_color, terrain_vertices, terrain_colors, terrain_normals)
+            add_cube((x, round(cube_height * height_multiplier), z), (1.0, 1.0, 1.0), cube_color, c_vertices, c_colors, c_normals)
+
+    chunks[(cx, cz)] = VBO()
+    chunks[(cx, cz)].data(c_vertices, "vertex")
+    chunks[(cx, cz)].data(c_colors, "color")
+    chunks[(cx, cz)].data(c_normals, "normal")
+
+    active_chunks[(cx, cz)] = False
+
+
+def generate_terrain(width, depth):
+    global vert_count
+    vert_count = width * depth
+
+    chunk_rad_x = math.ceil(width / (chunk_size * 2))
+    chunk_rad_z = math.ceil(depth / (chunk_size * 2))
+
+    for cx in range(-chunk_rad_x, chunk_rad_x):
+        for cz in range(-chunk_rad_z, chunk_rad_z):
+            generate_chunk(cx, cz)
 
 
 def add_cube(pos, scale, color, verts, cols, norms):
@@ -207,6 +232,21 @@ def render_light(pos, angle):
     glEnable(GL_LIGHT0)
 
 
+def check_draw_distance():
+    modelview = to_gl_float([0] * 16)
+    glGetFloatv(GL_MODELVIEW_MATRIX, modelview)
+    camera_world_pos = numpy.dot([0, 0, 0, 1], numpy.linalg.inv([[modelview[w + h * 4] for w in range(4)] for h in range(4)]))[:3]
+
+    for chunk in chunks.keys():
+        cx, cz = chunk
+        distance = math.sqrt((cx * 10 - camera_world_pos[0]) ** 2 + camera_world_pos[1] ** 2 + (cz * 10 - camera_world_pos[2]) ** 2)
+
+        if distance <= render_distance:
+            active_chunks[chunk] = True
+        else:
+            active_chunks[chunk] = False
+
+
 class CameraWindow(pyglet.window.Window):
     def __init__(self):
         super(CameraWindow, self).__init__(resizable=True)
@@ -234,13 +274,15 @@ class CameraWindow(pyglet.window.Window):
         glEnableClientState(GL_COLOR_ARRAY)
         glEnableClientState(GL_NORMAL_ARRAY)
 
-        terrain.vertex()
-        terrain.color()
-        terrain.normal()
+        check_draw_distance()
 
-        glDrawArrays(GL_QUADS, 0, len(terrain_vertices) // 3)
+        for chunk in chunks.keys():
+            if active_chunks[chunk]:
+                chunks[chunk].vertex()
+                chunks[chunk].color()
+                chunks[chunk].normal()
 
-        fps_display.draw()
+                glDrawArrays(GL_QUADS, 0, vert_count)
 
 init()
 window = CameraWindow()
