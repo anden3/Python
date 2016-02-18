@@ -1,5 +1,6 @@
 import math
 import random
+from time import time
 
 import pyglet
 import pyglet.gl as gl
@@ -11,18 +12,21 @@ height = 800
 gravity = 10
 air_resistance = 0.01
 friction_coefficient = 0.03
-grass_height = 5
+fire_delay = 0.1
 
 window = pyglet.window.Window()
 keys = key.KeyStateHandler()
 fps_display = pyglet.clock.ClockDisplay()
 
 terrain = pyglet.graphics.Batch()
+shell_batch = pyglet.graphics.Batch()
 ui = pyglet.graphics.Batch()
+
+debug = pyglet.graphics.Batch()
 
 window.push_handlers(keys)
 
-tank1, tank2 = None, None
+tank1 = None
 
 line_x = [0, width]
 
@@ -32,26 +36,32 @@ y_values = {
     width: height / 2
 }
 
+angles = {}
+
 tank_rects = [
-    (0, 0, 20, 5)
-    # (0, 0, 30, 10),
-    # (12, 10, 6, 10)
+    (0, 0, 30, 10)
 ]
+
+cannon_rects = [
+    (13, 0, 4, 15)
+]
+
+shells = []
+labels = []
+
+circle_cols = {}
 
 
 class Tank:
     def __init__(self):
         self.x = random.randint(5, width - 16)
-        self.y = y_values[self.x] + 300
-
-        self.angle_pos_x = self.x
-        self.angle_pos_y = self.y
+        self.y = y_values[self.x]
 
         self.vx = 100
         self.vy = -1
 
-        self.width = 20
-        self.height = 5
+        self.width = 30
+        self.height = 16
         self.mass = 35
 
         self.fuel = 300
@@ -61,15 +71,22 @@ class Tank:
         self.max_fuel = 300
 
         self.angle = 0
+        self.cannon_angle = 90
 
         self.on_ground = False
 
         self.color = (0.0, 0.4, 0.1, 1.0)
+
         self.batch = pyglet.graphics.Batch()
+        self.cannon_batch = pyglet.graphics.Batch()
+
+        self.last_fire = 0
 
         self.draw()
 
     def move(self, dx, dy):
+        tank1.draw_fuel()
+
         if self.fuel <= 0:
             return
 
@@ -83,57 +100,32 @@ class Tank:
         self.vy += dx * math.sin(math.radians(self.angle)) + dy * math.cos(math.radians(self.angle))
 
     def check_ground(self):
-        for x, y in [(x + self.angle_pos_x, self.angle_pos_y - self.height) for x in range(self.width)]:
-            draw_rect(x - 1, y - 1, 3, 3, (1.0, 0.0, 0.0, 1.0), self.batch)
+        x_vals = [self.x, self.x + self.width / 2, self.x + self.width]
+        diffs = [self.y - y_values[round(x)] for x in x_vals if 0 <= x < width]
+        min_diff = min(diffs)
 
-            if 0 <= x < width:
-                if y == y_values[round(x)]:
-                    self.on_ground = True
-                    break
+        self.on_ground = min_diff <= 0
 
-                elif y < y_values[round(x)]:
-                    if self.vx < 0 and 270 <= self.angle <= 360 - self.max_angle:
-                        self.x += 1
-                        self.vx = 0
+        if min_diff <= 0:
+            self.y -= min_diff
+            self.vy = 0
 
-                    elif self.vx > 0 and self.max_angle <= self.angle <= 90:
-                        self.x -= 1
-                        self.vx = 0
+            for diff in diffs:
+                diff -= min_diff
 
-                    else:
-                        self.y += (y_values[round(x)] - grass_height) - y
+            if len(diffs) > 2:
+                angle = math.degrees(math.atan2(diffs[0] - diffs[2], self.width))
 
-                    self.on_ground = True
-                    break
+                if angle < 0:
+                    angle += 360
 
-                else:
-                    self.on_ground = False
-
-    def check_angle(self):
-        if self.on_ground:
-            if y_values.setdefault(round(self.angle_pos_x + self.width), None) is not None:
-                x1, x2 = round(self.angle_pos_x), round(self.angle_pos_x + self.width)
-                y1, y2 = y_values.setdefault(x1, None), y_values.setdefault(x2, None)
-
-                if y1 is not None and y2 is not None:
-                    if y1 != y2:
-                        slope = (y2 - y1) / (x2 - x1)
-                        angle = math.degrees(math.acos(self.width / math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)))
-
-                        if slope < 0:
-                            angle = 360 - angle
-
-                        self.angle = angle
-        else:
-            self.angle = 0
+                self.cannon_angle += angle - self.angle
+                self.angle = angle
 
     def get_normal(self):
         return self.mass * gravity * abs(math.cos(math.radians(180 - abs(self.angle - 180))))
 
     def update(self, dt):
-        self.check_ground()
-        self.check_angle()
-
         if self.vy < 0:
             if self.on_ground:
                 self.vy = 0
@@ -162,7 +154,7 @@ class Tank:
                 self.vy += (get_rotated_coords(friction_coefficient * self.get_normal(), 0, self.angle)[1])
 
         if not self.on_ground and self.vx != 0:
-            self.vx -= air_resistance * abs(self.vx) * math.copysign(1, self.vx)
+            self.vx -= air_resistance * self.vx
 
         self.vy -= gravity
 
@@ -172,11 +164,26 @@ class Tank:
         self.x += self.vx * dt
         self.y += self.vy * dt
 
+        self.check_ground()
+
         self.draw()
+
+    def fire(self):
+        now = time()
+
+        if now - self.last_fire >= fire_delay:
+            self.last_fire = now
+            shells.append(Shell(self.x + cannon_rects[0][0] + (cannon_rects[0][2] / 2),
+                                self.y + cannon_rects[0][1] + cannon_rects[0][3],
+                                math.cos(math.radians(self.cannon_angle)),
+                                math.sin(math.radians(self.cannon_angle))))
 
     def draw(self):
         for x, y, w, h in tank_rects:
             draw_rect(self.x + x, self.y + y, w, h, self.color, self.batch)
+
+        for x, y, w, h in cannon_rects:
+            draw_rect(self.x + x, self.y + y, w, h, self.color, self.cannon_batch)
 
     def draw_fuel(self):
         draw_rect(10, height - 50, 102, 10, (0.0, 0.0, 0.0, 1.0), ui)
@@ -193,10 +200,91 @@ class Tank:
 
         gl.glPopMatrix()
 
-        p1 = get_rotated_coords(0, 0, self.angle)
-        self.angle_pos_x, self.angle_pos_y = self.x + p1[0], self.y + p1[1]
+        gl.glPushMatrix()
+
+        cx, cy, cw, ch = cannon_rects[0]
+
+        gl.glTranslatef(self.x + cx + cw / 2, self.y + cy + ch / 2, 0)
+        gl.glRotatef(self.cannon_angle - 90, 0, 0, 1)
+        gl.glTranslatef(-self.x - cx - cw / 2, -self.y - cy, 0)
+
+        self.cannon_batch.draw()
+
+        gl.glPopMatrix()
 
         self.batch = pyglet.graphics.Batch()
+        self.cannon_batch = pyglet.graphics.Batch()
+
+
+class Shell:
+    def __init__(self, x, y, vx, vy):
+        self.x = x
+        self.y = y
+
+        self.speed = 700
+
+        self.vx = vx * self.speed
+        self.vy = vy * self.speed
+
+        self.explosion_radius = 20
+
+        if len(circle_cols) <= 0:
+            self.gen_circle()
+
+    def gen_circle(self, tolerance=0.5):
+        for x in range(-self.explosion_radius, self.explosion_radius + 1):
+            start_y = None
+            length = 0
+
+            for y in range(-self.explosion_radius, self.explosion_radius + 1):
+                if math.sqrt(x ** 2 + y ** 2) - self.explosion_radius <= tolerance:
+                    if start_y is None:
+                        start_y = y
+                    length += 1
+                else:
+                    if start_y is not None:
+                        circle_cols[x] = (start_y, length)
+                        break
+
+            if circle_cols.setdefault(x, None) is None:
+                circle_cols[x] = (0, 0)
+
+    def explode(self):
+        for x in range(round(self.x - self.explosion_radius - 15), round(self.x + self.explosion_radius + 15)):
+            if 0 <= x <= width - 1:
+                if circle_cols.setdefault(round(x - self.x), None) is not None:
+                    draw_rect(x, 0, 1, height, (0.529, 0.807, 0.921, 1.0), terrain)
+                    y_values[x] -= circle_cols[round(x - self.x)][1]
+
+        smooth_curve(begin=round(self.x - self.explosion_radius - 5), end=round(self.x + self.explosion_radius + 50))
+
+        for x in range(round(self.x - self.explosion_radius - 15), round(self.x + self.explosion_radius + 15)):
+            if 0 <= x <= width - 1:
+                draw_rect(x, 0, 1, y_values[x], (0.470, 0.282, 0.0, 1.0), terrain)
+
+
+def draw_shells(dt):
+    global shell_batch
+    shell_batch = pyglet.graphics.Batch()
+
+    for shell in shells.copy():
+        shell.vx -= air_resistance * shell.vx
+        shell.vy -= gravity
+
+        shell.x += shell.vx * dt
+        shell.y += shell.vy * dt
+
+        if not (0 <= shell.x < width) or y_values.setdefault(round(shell.x), None) is None:
+            shells.remove(shell)
+            continue
+
+        if shell.y - (y_values[round(shell.x)]) < 0:
+            shell.explode()
+
+            shells.remove(shell)
+            continue
+
+        draw_rect(shell.x - 1, shell.y - 1, 3, 3, (0.0, 0.0, 0.0, 1.0), shell_batch)
 
 
 def get_rotated_coords(x, y, angle):
@@ -240,7 +328,7 @@ def midpoint_algorithm(min_y, max_y, step, iterations):
         max_y /= step
 
 
-def bresenham(x0, y0, x1, y1):
+def generate_heightmap(x0, y0, x1, y1):
     dx = x1 - x0
     dy = y1 - y0
     error = 0
@@ -250,12 +338,9 @@ def bresenham(x0, y0, x1, y1):
         if x not in x_values:
             x_values.add(x)
             y_values[round(x)] = round(y)
-
-            draw_rect(round(x), round(y), 1, grass_height, (0.0, 0.31372, 0.0, 1.0), terrain)
             error += abs(dy / dx)
 
             while error >= 0.5:
-                draw_rect(round(x), round(y), 1, grass_height, (0.0, 0.31372, 0.0, 1.0), terrain)
                 y += math.copysign(1, (y1 - y0))
                 error -= 1
 
@@ -263,7 +348,25 @@ def bresenham(x0, y0, x1, y1):
 def print_lines():
     for i, x in enumerate(line_x):
         if i < len(line_x) - 1:
-            bresenham(x, y_values[x], line_x[i + 1], y_values[line_x[i + 1]])
+            generate_heightmap(x, y_values[x], line_x[i + 1], y_values[line_x[i + 1]])
+
+
+def smooth_curve(begin=0, end=width, iterations=5, avg_range=5):
+    for i in range(iterations):
+        y_copy = y_values
+
+        for x in range(begin, end):
+            x1, x2 = x - avg_range, x + avg_range
+
+            if x < avg_range:
+                x1 = 0
+            if x > width - avg_range - 1:
+                x2 = width - 1
+
+            avg_vals = [y_copy[cx] for cx in range(x1, x2)]
+
+            if len(avg_vals) > 0:
+                y_values[x] = round(sum(avg_vals) / len(avg_vals))
 
 
 def line_fill():
@@ -271,18 +374,35 @@ def line_fill():
         draw_rect(x, 0, 1, y_values[x], (0.470, 0.282, 0.0, 1.0), terrain)
 
 
+def draw_text():
+    labels.append(pyglet.text.Label('Fuel', x=10, y=height - 30, color=(0, 0, 0, 255)))
+
+
+def distance(x1, y1, x2, y2):
+    return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+
 @window.event
 def on_draw():
+    global debug
+
     window.clear()
 
     gl.glLoadIdentity()
 
     terrain.draw()
     ui.draw()
-    fps_display.draw()
 
     tank1.render()
-    # tank2.render()
+    shell_batch.draw()
+
+    for label in labels:
+        label.draw()
+
+    fps_display.draw()
+
+    debug.draw()
+    debug = pyglet.graphics.Batch()
 
 
 def check_keys():
@@ -291,27 +411,32 @@ def check_keys():
     elif keys[key.D]:
         tank1.move(15, 0)
 
-    elif keys[key.W]:
-        tank1.move(0, 15)
-
-    if keys[key.Q]:
-        tank1.angle += 5
-    elif keys[key.E]:
-        tank1.angle -= 5
-
     if keys[key.R]:
         tank1.fuel = tank1.max_fuel
+        tank1.draw_fuel()
+
+    if keys[key.LEFT]:
+        tank1.cannon_angle += 1
+    elif keys[key.RIGHT]:
+        tank1.cannon_angle -= 1
+
+    if keys[key.SPACE]:
+        tank1.fire()
+
+    if keys[key.Z]:
+        global terrain
+        terrain = pyglet.graphics.Batch()
+        line_fill()
 
 
 def game_loop(dt):
     check_keys()
-    tank1.draw_fuel()
     tank1.update(dt)
-    # tank2.update(dt)
+    draw_shells(dt)
 
 
 def start():
-    global tank1, tank2
+    global tank1
 
     gl.glClearColor(0.529, 0.807, 0.921, 1.0)
     gl.glClear(gl.GL_COLOR_BUFFER_BIT)
@@ -321,16 +446,18 @@ def start():
     x, y = window.get_location()
     window.set_location(x - 100, y)
 
-    # midpoint_algorithm(-5, 5, 0.1, 2)
     midpoint_algorithm(-50, 50, 1.3, 7)
     print_lines()
+    smooth_curve()
     line_fill()
 
+    draw_text()
+
     tank1 = Tank()
-    # tank2 = Tank()
+
+    # get_angles()
 
     pyglet.clock.schedule_interval(game_loop, 1 / 120)
-
     pyglet.app.run()
 
 
