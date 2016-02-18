@@ -1,9 +1,7 @@
+import noise
 import pyglet
 from pyglet.gl import *
 from pyglet.window import key
-
-vertex_vbo = None
-color_vbo = None
 
 fps_display = pyglet.clock.ClockDisplay()
 
@@ -16,19 +14,35 @@ cube_signs = [
     (1, -1, -1), (-1, -1, -1), (-1, 1, -1), (1, 1, -1)      # Back
 ]
 
-cube_vertices = []
-cube_colors = []
+terrain_vertices = []
+terrain_colors = []
+terrain_normals = []
 
-cube_indexes = {}
-cube_translations = {}
+cube_normals = [
+    (0.0, 1.0, 0.0),      # Top
+    (0.0, -1.0, 0.0),     # Bottom
+    (-1.0, 0.0, 0.0),     # Left
+    (1.0, 0.0, 0.0),      # Right
+    (0.0, 0.0, -1.0),     # Front
+    (0.0, 0.0, 1.0)       # Back
+]
 
 
 def init():
-    global vertex_vbo, color_vbo
+    global terrain_vertices_vbo, terrain_colors_vbo, terrain_normals_vbo
+
+    light_pos = (GLfloat * 4)(0, 100, 0, 0)
+    mat_specular = (GLfloat * 4)(1, 1, 1, 1)
 
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
     glDepthFunc(GL_LEQUAL)
+
+    glLightfv(GL_LIGHT0, GL_POSITION, light_pos)
+    glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular)
+    glMaterialf(GL_FRONT, GL_SHININESS, 50.0)
+    glEnable(GL_LIGHTING)
+    glEnable(GL_LIGHT0)
 
     glClearColor(0.0, 0.0, 0.0, 1.0)
     glClearDepth(1.0)
@@ -38,14 +52,16 @@ def init():
     glShadeModel(GL_SMOOTH)
     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST)
 
-    add_cube(1, (0.0, 0.0, 0.0), (1000.0, 1.0, 1000.0), (1.0, 1.0, 1.0, 1.0))
-    add_cube(2, (0.0, 2.0, 0.0), (1.0, 1.0, 1.0), (1.0, 0.0, 0.0, 1.0))
+    generate_terrain(100, 100, 10)
 
-    vertex_vbo = VBO()
-    vertex_vbo.data(cube_vertices)
+    terrain_vertices_vbo = VBO()
+    terrain_vertices_vbo.data(terrain_vertices)
 
-    color_vbo = VBO()
-    color_vbo.data(cube_colors)
+    terrain_colors_vbo = VBO()
+    terrain_colors_vbo.data(terrain_colors)
+
+    terrain_normals_vbo = VBO()
+    terrain_normals_vbo.data(terrain_normals)
 
 
 class VBO:
@@ -69,6 +85,10 @@ class VBO:
     def color(self):
         self.bind()
         glColorPointer(4, GL_FLOAT, 0, 0)
+
+    def normal(self):
+        self.bind()
+        glNormalPointer(GL_FLOAT, 0, 0)
 
 
 class Camera(object):
@@ -117,24 +137,6 @@ class Camera(object):
             self.fov += 1
             self.perspective()
 
-        elif symbol == key.LEFT:
-            cube_translations[1][0] -= 5.0
-
-        elif symbol == key.RIGHT:
-            cube_translations[1][0] += 5.0
-
-        elif symbol == key.UP:
-            cube_translations[1][2] -= 5.0
-
-        elif symbol == key.DOWN:
-            cube_translations[1][2] += 5.0
-
-        elif symbol == key.SPACE:
-            cube_translations[1][1] += 5.0
-
-        elif symbol == key.LSHIFT:
-            cube_translations[1][1] -= 5.0
-
     def drag(self, x, y, dx, dy, button, modifiers):
         if button == 1:
             self.x -= dx * 2
@@ -155,24 +157,35 @@ class Camera(object):
         glRotatef(self.rz, 0, 0, 1)
 
 
-def add_cube(id, pos, scale, color):
+def generate_terrain(width, depth, height_multiplier):
+    for x in range(-(width // 2), width // 2):
+        for z in range(-(depth // 2), width // 2):
+            add_cube((x, noise.snoise2(x, z) * height_multiplier, z), (1.0, 1.0, 1.0), (0.0, 0.0, 1.0, 1.0), terrain_vertices, terrain_colors, terrain_normals)
+
+
+def add_cube(pos, scale, color, verts, cols, norms):
     x, y, z = pos
     w, h, d = scale
     r, g, b, a = color
 
     vertices = []
     colors = []
+    normals = []
+
+    index = 0
 
     for sx, sy, sz in cube_signs:
         vertices.extend([x + (w * sx), y + (h * sy), z + (d * sz)])
         colors.extend([r, g, b, a])
 
-    cube_indexes[id] = [(len(cube_vertices), len(cube_vertices) + len(vertices)),
-                        (len(cube_colors), len(cube_colors) + len(colors))]
-    cube_vertices.extend(vertices)
-    cube_colors.extend(colors)
+        if index % 4 == 0:
+            normals.extend([*cube_normals[index // 4]])
 
-    cube_translations[id] = [0.0, 0.0, 0.0]
+        index += 1
+
+    verts.extend(vertices)
+    cols.extend(colors)
+    norms.extend(normals)
 
 
 class CameraWindow(pyglet.window.Window):
@@ -189,20 +202,20 @@ class CameraWindow(pyglet.window.Window):
     def on_draw(self):
         self.clear()
         self.cam.apply()
-        fps_display.draw()
 
         glEnable(GL_DEPTH_TEST)
 
         glEnableClientState(GL_VERTEX_ARRAY)
         glEnableClientState(GL_COLOR_ARRAY)
+        glEnableClientState(GL_NORMAL_ARRAY)
 
-        vertex_vbo.vertex()
-        color_vbo.color()
+        terrain_vertices_vbo.vertex()
+        terrain_colors_vbo.color()
+        terrain_normals_vbo.normal()
 
-        for cube in cube_indexes:
-            glTranslatef(*cube_translations[cube])
-            glDrawArrays(GL_QUADS, cube_indexes[cube][0][0], cube_indexes[cube][0][1])
-            glTranslatef(-cube_translations[cube][0], -cube_translations[cube][1], -cube_translations[cube][2])
+        glDrawArrays(GL_QUADS, 0, len(terrain_vertices) // 3)
+
+        fps_display.draw()
 
 init()
 window = CameraWindow()
