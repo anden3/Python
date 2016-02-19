@@ -1,5 +1,3 @@
-import math
-
 import noise
 import numpy
 import pyglet
@@ -9,12 +7,12 @@ from pyglet.window import key
 fps_display = pyglet.clock.ClockDisplay()
 
 chunks = {}
-active_chunks = {}
+active_chunks = set()
 
 chunk_size = 10
 height_multiplier = 30
 zoom = 100
-render_distance = 500
+render_distance = 5
 
 cube_signs = [
     (-1, 1, -1), (-1, 1, 1), (1, 1, 1), (1, 1, -1),         # Top
@@ -47,8 +45,6 @@ def init():
     glDepthFunc(GL_LEQUAL)
     glShadeModel(GL_SMOOTH)
     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST)
-
-    generate_terrain(200, 200)
 
 
 class VBO:
@@ -88,8 +84,8 @@ class VBO:
 
 class Camera(object):
     mode = 1
-    x, y, z = 0, 0, 512
-    rx, ry, rz = 30, -45, 0
+    x, y, z = 0, height_multiplier, 0
+    rx, ry = 0, 0
     w, h = 640, 480
     far = 8192
     fov = 90
@@ -147,9 +143,8 @@ class Camera(object):
     def apply(self):
         glLoadIdentity()
         glTranslatef(-self.x, -self.y, -self.z)
-        glRotatef(self.rx, 1, 0, 0)
-        glRotatef(self.ry, 0, 1, 0)
-        glRotatef(self.rz, 0, 0, 1)
+        glRotatef(-self.rx, 1, 0, 0)
+        glRotatef(-self.ry, 0, 1, 0)
 
 
 def to_gl_float(data):
@@ -181,20 +176,6 @@ def generate_chunk(cx, cz):
     chunks[(cx, cz)].data(c_vertices, "vertex")
     chunks[(cx, cz)].data(c_colors, "color")
     chunks[(cx, cz)].data(c_normals, "normal")
-
-    active_chunks[(cx, cz)] = False
-
-
-def generate_terrain(width, depth):
-    global vert_count
-    vert_count = width * depth
-
-    chunk_rad_x = math.ceil(width / (chunk_size * 2))
-    chunk_rad_z = math.ceil(depth / (chunk_size * 2))
-
-    for cx in range(-chunk_rad_x, chunk_rad_x):
-        for cz in range(-chunk_rad_z, chunk_rad_z):
-            generate_chunk(cx, cz)
 
 
 def add_cube(pos, scale, color, verts, cols, norms):
@@ -237,14 +218,14 @@ def check_draw_distance():
     glGetFloatv(GL_MODELVIEW_MATRIX, modelview)
     camera_world_pos = numpy.dot([0, 0, 0, 1], numpy.linalg.inv([[modelview[w + h * 4] for w in range(4)] for h in range(4)]))[:3]
 
-    for chunk in chunks.keys():
-        cx, cz = chunk
-        distance = math.sqrt((cx * 10 - camera_world_pos[0]) ** 2 + camera_world_pos[1] ** 2 + (cz * 10 - camera_world_pos[2]) ** 2)
+    current_chunk = (int(round(camera_world_pos[0] / chunk_size)), int(round(camera_world_pos[2] / chunk_size)))
+    active_chunks.clear()
 
-        if distance <= render_distance:
-            active_chunks[chunk] = True
-        else:
-            active_chunks[chunk] = False
+    for cx in range(current_chunk[0] - render_distance, current_chunk[0] + render_distance + 1):
+        for cz in range(current_chunk[1] - render_distance, current_chunk[1] + render_distance + 1):
+            if (cx, cz) not in chunks:
+                generate_chunk(cx, cz)
+            active_chunks.add((cx, cz))
 
 
 class CameraWindow(pyglet.window.Window):
@@ -276,13 +257,12 @@ class CameraWindow(pyglet.window.Window):
 
         check_draw_distance()
 
-        for chunk in chunks.keys():
-            if active_chunks[chunk]:
-                chunks[chunk].vertex()
-                chunks[chunk].color()
-                chunks[chunk].normal()
+        for chunk in active_chunks:
+            chunks[chunk].vertex()
+            chunks[chunk].color()
+            chunks[chunk].normal()
 
-                glDrawArrays(GL_QUADS, 0, vert_count)
+            glDrawArrays(GL_QUADS, 0, chunk_size ** 2 * 24)
 
 init()
 window = CameraWindow()
