@@ -1,4 +1,5 @@
 import math
+import random
 
 import noise
 import numpy
@@ -16,6 +17,8 @@ chunk_size = 10
 height_multiplier = 30
 zoom = 100
 render_distance = 5
+
+seed = random.uniform(-1000, 1000)
 
 cube_signs = [
     (-1, 1, -1), (-1, 1, 1), (1, 1, 1), (1, 1, -1),         # Top
@@ -105,29 +108,21 @@ class VBO:
 
 
 class Camera(object):
-    mode = 1
-    x, y, z = 0, 0, 0
+    x, y, z = 0, height_multiplier, 0
     rx, ry = 0, 0
     w, h = 1920, 1080
     far = 8192
     fov = 90
 
     speed_mult = 5
+    world_pos = None
+    current_chunk = None
+    current_tile = None
 
     def view(self, width, height):
         self.w, self.h = width, height
         glViewport(0, 0, width, height)
-
-        if self.mode == 1:
-            self.perspective()
-        elif self.mode == 2:
-            self.isometric()
-
-    def isometric(self):
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        glOrtho(-self.w / 2.0, self.w / 2.0, -self.h / 2.0, self.h / 2.0, 0, self.far)
-        glMatrixMode(GL_MODELVIEW)
+        self.perspective()
 
     def perspective(self):
         glMatrixMode(GL_PROJECTION)
@@ -135,28 +130,19 @@ class Camera(object):
         gluPerspective(self.fov, float(self.w) / self.h, 0.1, self.far)
         glMatrixMode(GL_MODELVIEW)
 
-    def key_press(self, symbol, modifiers):
-        if symbol == key.F1:
-            self.mode = 1
-            self.perspective()
-
-        elif symbol == key.F2:
-            self.mode = 2
-            self.isometric()
-
-        elif self.mode == 1 and symbol == key.NUM_SUBTRACT:
-            self.fov -= 1
-            self.perspective()
-
-        elif self.mode == 1 and symbol == key.NUM_ADD:
-            self.fov += 1
-            self.perspective()
-
     def key_loop(self, dt):
         if keys[key.LSHIFT]:
             self.speed_mult = 25
         else:
             self.speed_mult = 5
+
+        if keys[key.NUM_SUBTRACT]:
+            self.fov -= self.speed_mult * dt
+            self.perspective()
+
+        elif keys[key.NUM_ADD]:
+            self.fov += self.speed_mult * dt
+            self.perspective()
 
         if keys[key.W]:
             self.x -= math.sin(math.radians(self.ry)) * self.speed_mult * dt
@@ -193,6 +179,16 @@ class Camera(object):
         glRotatef(-self.ry, 0, 1, 0)
         glTranslatef(-self.x, -self.y, -self.z)
 
+        modelview = to_gl_float([0] * 16)
+        glGetFloatv(GL_MODELVIEW_MATRIX, modelview)
+        self.world_pos = numpy.dot([0, 0, 0, 1], numpy.linalg.inv([[modelview[w + h * 4] for w in range(4)] for h in range(4)]))[:3]
+
+        self.get_current_tile()
+
+    def get_current_tile(self):
+        self.current_chunk = (int(math.floor(self.world_pos[0] / chunk_size)), int(math.floor(self.world_pos[2] / chunk_size)))
+        self.current_tile = (int(self.world_pos[0] - self.current_chunk[0] * chunk_size), int(self.world_pos[2] - self.current_chunk[1] * chunk_size))
+
 
 def to_gl_float(data):
     return (GLfloat * len(data))(*data)
@@ -209,7 +205,7 @@ def generate_chunk(cx, cz):
         for sz in range(chunk_size):
             x = sx + cx * chunk_size
             z = sz + cz * chunk_size
-            cube_height = noise.snoise2(x / zoom, z / zoom)
+            cube_height = noise.snoise3(x / zoom, z / zoom, seed, octaves=3)
             cube_color = None
 
             chunk_height[(cx, cz)][(sx, sz)] = cube_height
@@ -265,11 +261,7 @@ def render_light(pos, angle):
 
 
 def check_draw_distance():
-    modelview = to_gl_float([0] * 16)
-    glGetFloatv(GL_MODELVIEW_MATRIX, modelview)
-    camera_world_pos = numpy.dot([0, 0, 0, 1], numpy.linalg.inv([[modelview[w + h * 4] for w in range(4)] for h in range(4)]))[:3]
-
-    current_chunk = (int(round(camera_world_pos[0] / chunk_size)), int(round(camera_world_pos[2] / chunk_size)))
+    current_chunk = window.cam.current_chunk
     active_chunks.clear()
 
     for cx in range(current_chunk[0] - render_distance, current_chunk[0] + render_distance + 1):
@@ -286,7 +278,6 @@ class CameraWindow(pyglet.window.Window):
 
         self.cam = Camera()
         self.on_resize = self.cam.view
-        self.on_key_press = self.cam.key_press
         self.on_mouse_drag = self.cam.drag
 
         pyglet.clock.schedule_interval(self.cam.key_loop, 1 / 60)
