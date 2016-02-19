@@ -1,3 +1,5 @@
+import math
+
 import noise
 import numpy
 import pyglet
@@ -7,6 +9,7 @@ from pyglet.window import key
 fps_display = pyglet.clock.ClockDisplay()
 
 chunks = {}
+chunk_height = {}
 active_chunks = set()
 
 chunk_size = 10
@@ -49,6 +52,10 @@ def init():
 
 class VBO:
     def __init__(self):
+        self.vertex_buffer_set = False
+        self.color_buffer_set = False
+        self.normal_buffer_set = False
+
         self.buffer_vertex = GLuint(0)
         self.buffer_color = GLuint(0)
         self.buffer_normal = GLuint(0)
@@ -61,10 +68,15 @@ class VBO:
         data_gl = to_gl_float(data)
 
         if buffer_type == "vertex":
+            self.vertex_buffer_set = True
             glBindBuffer(GL_ARRAY_BUFFER, self.buffer_vertex)
+
         elif buffer_type == "color":
+            self.color_buffer_set = True
             glBindBuffer(GL_ARRAY_BUFFER, self.buffer_color)
+
         elif buffer_type == "normal":
+            self.normal_buffer_set = True
             glBindBuffer(GL_ARRAY_BUFFER, self.buffer_normal)
 
         glBufferData(GL_ARRAY_BUFFER, len(data) * 4, data_gl, GL_STATIC_DRAW)
@@ -81,14 +93,26 @@ class VBO:
         glBindBuffer(GL_ARRAY_BUFFER, self.buffer_normal)
         glNormalPointer(GL_FLOAT, 0, 0)
 
+    def draw(self):
+        if self.vertex_buffer_set:
+            self.vertex()
+        if self.color_buffer_set:
+            self.color()
+        if self.normal_buffer_set:
+            self.normal()
+
+        glDrawArrays(GL_QUADS, 0, chunk_size ** 2 * 24)
+
 
 class Camera(object):
     mode = 1
-    x, y, z = 0, height_multiplier, 0
+    x, y, z = 0, 0, 0
     rx, ry = 0, 0
-    w, h = 640, 480
+    w, h = 1920, 1080
     far = 8192
     fov = 90
+
+    speed_mult = 5
 
     def view(self, width, height):
         self.w, self.h = width, height
@@ -111,7 +135,7 @@ class Camera(object):
         gluPerspective(self.fov, float(self.w) / self.h, 0.1, self.far)
         glMatrixMode(GL_MODELVIEW)
 
-    def key(self, symbol, modifiers):
+    def key_press(self, symbol, modifiers):
         if symbol == key.F1:
             self.mode = 1
             self.perspective()
@@ -128,23 +152,46 @@ class Camera(object):
             self.fov += 1
             self.perspective()
 
+    def key_loop(self, dt):
+        if keys[key.LSHIFT]:
+            self.speed_mult = 25
+        else:
+            self.speed_mult = 5
+
+        if keys[key.W]:
+            self.x -= math.sin(math.radians(self.ry)) * self.speed_mult * dt
+            self.y += math.sin(math.radians(self.rx)) * self.speed_mult * dt
+            self.z -= math.cos(math.radians(self.ry)) * self.speed_mult * dt
+
+        elif keys[key.S]:
+            self.x += math.sin(math.radians(self.ry)) * self.speed_mult * dt
+            self.y -= math.sin(math.radians(self.rx)) * self.speed_mult * dt
+            self.z += math.cos(math.radians(self.ry)) * self.speed_mult * dt
+
+        if keys[key.D]:
+            self.x += math.cos(math.radians(self.ry)) * self.speed_mult * dt
+            self.z -= math.sin(math.radians(self.ry)) * self.speed_mult * dt
+
+        elif keys[key.A]:
+            self.x -= math.cos(math.radians(self.ry)) * self.speed_mult * dt
+            self.z += math.sin(math.radians(self.ry)) * self.speed_mult * dt
+
     def drag(self, x, y, dx, dy, button, modifiers):
-        if button == 1:
-            self.x -= dx * 2
-            self.y -= dy * 2
+        if button == 4:
+            self.ry -= dx / 4
+            self.rx += dy / 4
 
-        elif button == 4:
-            self.ry += dx / 4
-            self.rx -= dy / 4
+            if self.rx < 0:
+                self.rx += 360
 
-    def scroll(self, x, y, scroll_x, scroll_y):
-        self.z -= scroll_y * 10
+            if self.ry < 0:
+                self.ry += 360
 
     def apply(self):
         glLoadIdentity()
-        glTranslatef(-self.x, -self.y, -self.z)
         glRotatef(-self.rx, 1, 0, 0)
         glRotatef(-self.ry, 0, 1, 0)
+        glTranslatef(-self.x, -self.y, -self.z)
 
 
 def to_gl_float(data):
@@ -156,12 +203,16 @@ def generate_chunk(cx, cz):
     c_colors = []
     c_normals = []
 
+    chunk_height[(cx, cz)] = {}
+
     for sx in range(chunk_size):
         for sz in range(chunk_size):
             x = sx + cx * chunk_size
             z = sz + cz * chunk_size
             cube_height = noise.snoise2(x / zoom, z / zoom)
             cube_color = None
+
+            chunk_height[(cx, cz)][(sx, sz)] = cube_height
 
             if -1.0 <= cube_height < -0.33:
                 cube_color = (0.0, 0.0, 1.0, 1.0)
@@ -235,9 +286,10 @@ class CameraWindow(pyglet.window.Window):
 
         self.cam = Camera()
         self.on_resize = self.cam.view
-        self.on_key_press = self.cam.key
+        self.on_key_press = self.cam.key_press
         self.on_mouse_drag = self.cam.drag
-        self.on_mouse_scroll = self.cam.scroll
+
+        pyglet.clock.schedule_interval(self.cam.key_loop, 1 / 60)
 
     def on_draw(self):
         self.clear()
@@ -258,12 +310,12 @@ class CameraWindow(pyglet.window.Window):
         check_draw_distance()
 
         for chunk in active_chunks:
-            chunks[chunk].vertex()
-            chunks[chunk].color()
-            chunks[chunk].normal()
-
-            glDrawArrays(GL_QUADS, 0, chunk_size ** 2 * 24)
+            chunks[chunk].draw()
 
 init()
 window = CameraWindow()
+
+keys = key.KeyStateHandler()
+window.push_handlers(keys)
+
 pyglet.app.run()
