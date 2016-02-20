@@ -7,36 +7,27 @@ import pyglet
 from pyglet.gl import *
 from pyglet.window import key
 
-fps_display = pyglet.clock.ClockDisplay()
-
 chunks = {}
 chunk_height = {}
 active_chunks = set()
 
-chunk_size = 10
+chunk_size = 16
 height_multiplier = 30
 zoom = 100
-render_distance = 5
+render_distance = 3
 
 seed = random.uniform(-1000, 1000)
 
 cube_signs = [
-    (-1, 1, -1), (-1, 1, 1), (1, 1, 1), (1, 1, -1),         # Top
-    (-1, -1, -1), (1, -1, -1), (1, -1, 1), (-1, -1, 1),     # Bottom
-    (-1, -1, -1), (-1, -1, 1), (-1, 1, 1), (-1, 1, -1),     # Left
-    (1, -1, 1), (1, -1, -1), (1, 1, -1), (1, 1, 1),         # Right
-    (-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1),         # Front
-    (1, -1, -1), (-1, -1, -1), (-1, 1, -1), (1, 1, -1)      # Back
+    (-1, -1, -1), (-1, -1, 1), (-1, 1, 1), (-1, 1, -1),     # Left      (-X)
+    (1, -1, 1), (1, -1, -1), (1, 1, -1), (1, 1, 1),         # Right     (+X)
+    (-1, -1, -1), (1, -1, -1), (1, -1, 1), (-1, -1, 1),     # Bottom    (-Y)
+    (-1, 1, -1), (-1, 1, 1), (1, 1, 1), (1, 1, -1),         # Top       (+Y)
+    (-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1),         # Front     (-Z)
+    (1, -1, -1), (-1, -1, -1), (-1, 1, -1), (1, 1, -1)      # Back      (+Z)
 ]
 
-cube_normals = [
-    (0.0, 1.0, 0.0),      # Top
-    (0.0, -1.0, 0.0),     # Bottom
-    (-1.0, 0.0, 0.0),     # Left
-    (1.0, 0.0, 0.0),      # Right
-    (0.0, 0.0, -1.0),     # Front
-    (0.0, 0.0, 1.0)       # Back
-]
+cube_normals = [(0.0, 1.0, 0.0), (0.0, -1.0, 0.0), (-1.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, 0.0, 1.0)]
 
 
 def init():
@@ -68,8 +59,6 @@ class VBO:
         glGenBuffers(1, self.buffer_normal)
 
     def data(self, data, buffer_type):
-        data_gl = to_gl_float(data)
-
         if buffer_type == "vertex":
             self.vertex_buffer_set = True
             glBindBuffer(GL_ARRAY_BUFFER, self.buffer_vertex)
@@ -82,7 +71,7 @@ class VBO:
             self.normal_buffer_set = True
             glBindBuffer(GL_ARRAY_BUFFER, self.buffer_normal)
 
-        glBufferData(GL_ARRAY_BUFFER, len(data) * 4, data_gl, GL_STATIC_DRAW)
+        glBufferData(GL_ARRAY_BUFFER, len(data) * 4, to_gl_float(data), GL_STATIC_DRAW)
 
     def vertex(self):
         glBindBuffer(GL_ARRAY_BUFFER, self.buffer_vertex)
@@ -127,7 +116,7 @@ class Camera(object):
     def perspective(self):
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        gluPerspective(self.fov, float(self.w) / self.h, 0.1, self.far)
+        gluPerspective(self.fov, self.w / self.h, 0.1, self.far)
         glMatrixMode(GL_MODELVIEW)
 
     def key_loop(self, dt):
@@ -179,13 +168,11 @@ class Camera(object):
         glRotatef(-self.ry, 0, 1, 0)
         glTranslatef(-self.x, -self.y, -self.z)
 
+    def get_world_pos(self):
         modelview = to_gl_float([0] * 16)
         glGetFloatv(GL_MODELVIEW_MATRIX, modelview)
+
         self.world_pos = numpy.dot([0, 0, 0, 1], numpy.linalg.inv([[modelview[w + h * 4] for w in range(4)] for h in range(4)]))[:3]
-
-        self.get_current_tile()
-
-    def get_current_tile(self):
         self.current_chunk = (int(math.floor(self.world_pos[0] / chunk_size)), int(math.floor(self.world_pos[2] / chunk_size)))
         self.current_tile = (int(self.world_pos[0] - self.current_chunk[0] * chunk_size), int(self.world_pos[2] - self.current_chunk[1] * chunk_size))
 
@@ -226,34 +213,28 @@ def generate_chunk(cx, cz):
 
 
 def add_cube(pos, scale, color, verts, cols, norms):
-    x, y, z = pos
     w, h, d = scale[0] / 2, scale[1] / 2, scale[2] / 2
-    r, g, b, a = color
 
     vertices = []
     colors = []
     normals = []
 
-    index = 0
-
-    for sx, sy, sz in cube_signs:
-        vertices.extend([x + (w * sx), y + (h * sy), z + (d * sz)])
-        colors.extend([r, g, b, a])
-        normals.extend([*cube_normals[index // 4]])
-
-        index += 1
+    for i, (sx, sy, sz) in enumerate(cube_signs):
+        vertices.extend([pos[0] + (w * sx), pos[1] + (h * sy), pos[2] + (d * sz)])
+        colors.extend([*color])
+        normals.extend([*cube_normals[i // 4]])
 
     verts.extend(vertices)
     cols.extend(colors)
     norms.extend(normals)
 
 
-def render_light(pos, angle):
+def render_light(pos, angle, attenuation=0):
     glLightfv(GL_LIGHT0, GL_AMBIENT, to_gl_float((0.2, 0.2, 0.2, 1.0)))
     glLightfv(GL_LIGHT0, GL_DIFFUSE, to_gl_float((1, 1, 1, 1.0)))
     glLightfv(GL_LIGHT0, GL_SPECULAR, to_gl_float((0.5, 0.5, 0.5, 1.0)))
 
-    glLightfv(GL_LIGHT0, GL_POSITION, to_gl_float((*pos, 0)))
+    glLightfv(GL_LIGHT0, GL_POSITION, to_gl_float((*pos, attenuation)))
     glLightfv(GL_LIGHT0, GL_SPOT_CUTOFF, to_gl_float([angle]))
     glLightfv(GL_LIGHT0, GL_SPOT_DIRECTION, to_gl_float((0, -1, 0)))
 
@@ -285,11 +266,12 @@ class CameraWindow(pyglet.window.Window):
     def on_draw(self):
         self.clear()
         self.cam.apply()
+        self.cam.get_world_pos()
 
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_LIGHTING)
 
-        render_light((0, 10, 0), 45)
+        render_light((0, 100, 0), 45)
 
         glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE)
         glEnable(GL_COLOR_MATERIAL)
