@@ -1,5 +1,6 @@
 import math
 import random
+from ctypes import *
 
 import noise
 import numpy
@@ -19,19 +20,18 @@ render_distance = 3
 seed = random.uniform(-1000, 1000)
 
 cube_signs = [
-    (-1, -1, -1), (-1, -1, 1), (-1, 1, 1), (-1, 1, -1),     # Left      (-X)
-    (1, -1, 1), (1, -1, -1), (1, 1, -1), (1, 1, 1),         # Right     (+X)
-    (-1, -1, -1), (1, -1, -1), (1, -1, 1), (-1, -1, 1),     # Bottom    (-Y)
-    (-1, 1, -1), (-1, 1, 1), (1, 1, 1), (1, 1, -1),         # Top       (+Y)
-    (-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1),         # Front     (-Z)
-    (1, -1, -1), (-1, -1, -1), (-1, 1, -1), (1, 1, -1)      # Back      (+Z)
+    (0, 0, 0), (0, 0, 1), (0, 1, 1), (0, 1, 0),     # Left      (-X)
+    (1, 0, 1), (1, 0, 0), (1, 1, 0), (1, 1, 1),     # Right     (+X)
+    (0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1),     # Bottom    (-Y)
+    (0, 1, 0), (0, 1, 1), (1, 1, 1), (1, 1, 0),     # Top       (+Y)
+    (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1),     # Front     (-Z)
+    (1, 0, 0), (0, 0, 0), (0, 1, 0), (1, 1, 0)      # Back      (+Z)
 ]
 
-cube_normals = [(0.0, 1.0, 0.0), (0.0, -1.0, 0.0), (-1.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, 0.0, 1.0)]
+cube_normals = [(-1.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, -1.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, -1.0), (0.0, 0.0, 1.0)]
 
 
 def init():
-    glClearColor(0.0, 0.0, 0.0, 1.0)
     glClearDepth(1.0)
 
     glEnable(GL_BLEND)
@@ -42,6 +42,13 @@ def init():
     glDepthFunc(GL_LEQUAL)
     glShadeModel(GL_SMOOTH)
     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST)
+
+    global window, keys
+    window = CameraWindow()
+    keys = key.KeyStateHandler()
+    window.push_handlers(keys)
+
+    pyglet.app.run()
 
 
 class VBO:
@@ -96,17 +103,98 @@ class VBO:
         glDrawArrays(GL_QUADS, 0, chunk_size ** 2 * 24)
 
 
+class Shader:
+    def __init__(self, vert=None, frag=None, geom=None):
+        self.handle = glCreateProgram()
+        self.linked = False
+
+        if vert is not None:
+            self.create_shader(vert, GL_VERTEX_SHADER)
+
+        if frag is not None:
+            self.create_shader(frag, GL_FRAGMENT_SHADER)
+
+        if geom is not None:
+            self.create_shader(frag, GL_GEOMETRY_SHADER_EXT)
+
+        self.link()
+
+    def create_shader(self, strings, shader_type):
+        count = len(strings)
+
+        if count < 1:
+            return
+
+        byte_strings = [str.encode(s) for s in strings]
+
+        shader = glCreateShader(shader_type)
+        src = (c_char_p * count)(*byte_strings)
+        glShaderSource(shader, count, cast(pointer(src), POINTER(POINTER(c_char))), None)
+
+        glCompileShader(shader)
+        temp = c_int(0)
+        glGetShaderiv(shader, GL_COMPILE_STATUS, byref(temp))
+
+        if not temp:
+            glGetShaderiv(shader, GL_INFO_LOG_LENGTH, byref(temp))
+            buffer = create_string_buffer(temp.value)
+            glGetShaderInfoLog(shader, temp, None, buffer)
+            print(buffer.value)
+        else:
+            glAttachShader(self.handle, shader)
+
+    def link(self):
+        glLinkProgram(self.handle)
+        temp = c_int(0)
+        glGetProgramiv(self.handle, GL_LINK_STATUS, byref(temp))
+
+        if not temp:
+            glGetProgramiv(self.handle, GL_INFO_LOG_LENGTH, byref(temp))
+            buffer = create_string_buffer(temp.value)
+            glGetProgramInfoLog(self.handle, temp, None, buffer)
+            print(buffer.value)
+        else:
+            self.linked = True
+
+    def bind(self):
+        glUseProgram(self.handle)
+
+    def unbind(self):
+        glUseProgram(0)
+
+    def uniformf(self, name, *vals):
+        if len(vals) in range(1, 5):
+            {
+                1: glUniform1f, 2: glUniform2f, 3: glUniform3f, 4: glUniform4f
+            }[len(vals)](glGetUniformLocation(self.handle, str.encode(name)), *vals)
+
+    def uniformi(self, name, *vals):
+        if len(vals) in range(1, 5):
+            {
+                1: glUniform1i, 2: glUniform2i, 3: glUniform3i, 4: glUniform4i
+            }[len(vals)](glGetUniformLocation(self.handle, str.encode(name)), *vals)
+
+    def uniform_matrixf(self, name, mat):
+        glUniformMatrix4fv(glGetUniformLocation(self.handle, str.encode(name)), 1, False, (GLfloat * len(mat))(*mat))
+
+
 class Camera(object):
-    x, y, z = 0, height_multiplier, 0
-    rx, ry = 0, 0
+    x, y, z = 0, height_multiplier * 2, 0
+    rx, ry = 340, 0
     w, h = 1920, 1080
     far = 8192
     fov = 90
 
+    vx, vy, vz = 0, 0, 0
+
     speed_mult = 5
+    camera_height = 2
+
     world_pos = None
     current_chunk = None
     current_tile = None
+
+    flying = False
 
     def view(self, width, height):
         self.w, self.h = width, height
@@ -135,13 +223,17 @@ class Camera(object):
 
         if keys[key.W]:
             self.x -= math.sin(math.radians(self.ry)) * self.speed_mult * dt
-            self.y += math.sin(math.radians(self.rx)) * self.speed_mult * dt
             self.z -= math.cos(math.radians(self.ry)) * self.speed_mult * dt
+
+            if self.flying:
+                self.y += math.sin(math.radians(self.rx)) * self.speed_mult * dt
 
         elif keys[key.S]:
             self.x += math.sin(math.radians(self.ry)) * self.speed_mult * dt
-            self.y -= math.sin(math.radians(self.rx)) * self.speed_mult * dt
             self.z += math.cos(math.radians(self.ry)) * self.speed_mult * dt
+
+            if self.flying:
+                self.y -= math.sin(math.radians(self.rx)) * self.speed_mult * dt
 
         if keys[key.D]:
             self.x += math.cos(math.radians(self.ry)) * self.speed_mult * dt
@@ -151,22 +243,21 @@ class Camera(object):
             self.x -= math.cos(math.radians(self.ry)) * self.speed_mult * dt
             self.z += math.sin(math.radians(self.ry)) * self.speed_mult * dt
 
-    def drag(self, x, y, dx, dy, button, modifiers):
-        if button == 4:
-            self.ry -= dx / 4
-            self.rx += dy / 4
+    def key_down(self, symbol, modifiers):
+        if symbol == key.F:
+            self.flying = not self.flying
+        elif symbol == key.ESCAPE:
+            pyglet.app.exit()
 
-            if self.rx < 0:
-                self.rx += 360
+    def mouse_move(self, x, y, dx, dy):
+        self.ry -= dx / 4
+        self.rx += dy / 4
 
-            if self.ry < 0:
-                self.ry += 360
+        if self.rx < 0:
+            self.rx += 360
 
-    def apply(self):
-        glLoadIdentity()
-        glRotatef(-self.rx, 1, 0, 0)
-        glRotatef(-self.ry, 0, 1, 0)
-        glTranslatef(-self.x, -self.y, -self.z)
+        if self.ry < 0:
+            self.ry += 360
 
     def get_world_pos(self):
         modelview = to_gl_float([0] * 16)
@@ -175,6 +266,40 @@ class Camera(object):
         self.world_pos = numpy.dot([0, 0, 0, 1], numpy.linalg.inv([[modelview[w + h * 4] for w in range(4)] for h in range(4)]))[:3]
         self.current_chunk = (int(math.floor(self.world_pos[0] / chunk_size)), int(math.floor(self.world_pos[2] / chunk_size)))
         self.current_tile = (int(self.world_pos[0] - self.current_chunk[0] * chunk_size), int(self.world_pos[2] - self.current_chunk[1] * chunk_size))
+
+    def update(self, dt):
+        self.get_world_pos()
+
+        try:
+            self.key_loop(dt)
+        except NameError:
+            pass
+
+        if not self.flying and self.current_chunk in active_chunks and self.current_tile in chunk_height[self.current_chunk]:
+            height_diff = self.y - chunk_height[self.current_chunk][self.current_tile] - self.camera_height
+
+            if abs(height_diff) < 0.01:
+                self.vy = 0
+
+                if keys[key.SPACE]:
+                    self.vy += 10
+
+            elif height_diff > 0:
+                self.vy -= 9.82 * dt
+
+            elif height_diff < 0:
+                self.y -= height_diff * 0.3
+                self.vy = 0
+        else:
+            self.vy = 0
+
+        self.y += self.vy * dt
+
+    def apply(self):
+        glLoadIdentity()
+        glRotatef(-self.rx, 1, 0, 0)
+        glRotatef(-self.ry, 0, 1, 0)
+        glTranslatef(-self.x, -self.y, -self.z)
 
 
 def to_gl_float(data):
@@ -192,19 +317,22 @@ def generate_chunk(cx, cz):
         for sz in range(chunk_size):
             x = sx + cx * chunk_size
             z = sz + cz * chunk_size
-            cube_height = noise.snoise3(x / zoom, z / zoom, seed, octaves=3)
+            noise_height = noise.snoise3(x / zoom, z / zoom, seed, octaves=3)
             cube_color = None
 
+            if -1.0 <= noise_height < -0.33:
+                cube_color = (0.0, 0.0, 0.5, 1.0)
+            elif -0.33 <= noise_height < -0.11:
+                cube_color = (0.76, 0.70, 0.50, 1.0)
+            elif -0.11 <= noise_height < 0.66:
+                cube_color = (0.0, 0.5, 0.0, 1.0)
+            elif 0.66 <= noise_height <= 1.0:
+                cube_color = (0.8, 0.8, 0.8, 1.0)
+
+            cube_height = round((noise_height + 1) * height_multiplier)
             chunk_height[(cx, cz)][(sx, sz)] = cube_height
 
-            if -1.0 <= cube_height < -0.33:
-                cube_color = (0.0, 0.0, 1.0, 1.0)
-            elif -0.33 <= cube_height < 0.33:
-                cube_color = (0.0, 1.0, 0.0, 1.0)
-            elif 0.33 <= cube_height <= 1.0:
-                cube_color = (1.0, 0.0, 0.0, 1.0)
-
-            add_cube((x, round(cube_height * height_multiplier), z), (1.0, 1.0, 1.0), cube_color, c_vertices, c_colors, c_normals)
+            add_cube((x, 0, z), (1, cube_height, 1), cube_color, c_vertices, c_colors, c_normals)
 
     chunks[(cx, cz)] = VBO()
     chunks[(cx, cz)].data(c_vertices, "vertex")
@@ -213,7 +341,7 @@ def generate_chunk(cx, cz):
 
 
 def add_cube(pos, scale, color, verts, cols, norms):
-    w, h, d = scale[0] / 2, scale[1] / 2, scale[2] / 2
+    w, h, d = scale
 
     vertices = []
     colors = []
@@ -229,14 +357,14 @@ def add_cube(pos, scale, color, verts, cols, norms):
     norms.extend(normals)
 
 
-def render_light(pos, angle, attenuation=0):
+def render_light(pos, direction, angle, attenuation=0):
     glLightfv(GL_LIGHT0, GL_AMBIENT, to_gl_float((0.2, 0.2, 0.2, 1.0)))
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, to_gl_float((1, 1, 1, 1.0)))
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, to_gl_float((1.0, 1.0, 1.0, 1.0)))
     glLightfv(GL_LIGHT0, GL_SPECULAR, to_gl_float((0.5, 0.5, 0.5, 1.0)))
 
     glLightfv(GL_LIGHT0, GL_POSITION, to_gl_float((*pos, attenuation)))
     glLightfv(GL_LIGHT0, GL_SPOT_CUTOFF, to_gl_float([angle]))
-    glLightfv(GL_LIGHT0, GL_SPOT_DIRECTION, to_gl_float((0, -1, 0)))
+    glLightfv(GL_LIGHT0, GL_SPOT_DIRECTION, to_gl_float(direction))
 
     glEnable(GL_LIGHT0)
 
@@ -256,22 +384,31 @@ class CameraWindow(pyglet.window.Window):
     def __init__(self):
         super(CameraWindow, self).__init__(resizable=True)
         self.maximize()
+        self.set_fullscreen()
+
+        self.set_exclusive_mouse(True)
 
         self.cam = Camera()
+        self.on_key_press = self.cam.key_down
         self.on_resize = self.cam.view
-        self.on_mouse_drag = self.cam.drag
+        self.on_mouse_motion = self.cam.mouse_move
 
-        pyglet.clock.schedule_interval(self.cam.key_loop, 1 / 60)
+        self.cam.update(0.0)
+
+        pyglet.clock.schedule_interval(self.cam.update, 1 / 60)
 
     def on_draw(self):
-        self.clear()
+        assert glGetError() == GL_NO_ERROR
+
+        glClearColor(0.5, 0.69, 1.0, 1.0)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
         self.cam.apply()
-        self.cam.get_world_pos()
 
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_LIGHTING)
 
-        render_light((0, 100, 0), 45)
+        render_light((0, 100, 0), (0.4, -0.824, 0.4), 45)
 
         glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE)
         glEnable(GL_COLOR_MATERIAL)
@@ -282,13 +419,42 @@ class CameraWindow(pyglet.window.Window):
 
         check_draw_distance()
 
+        # shader1.bind()
+
         for chunk in active_chunks:
             chunks[chunk].draw()
 
+        # shader1.unbind()
+
+shader1 = Shader(['''
+    varying vec3 N;
+    varying vec3 v;
+
+    void main() {
+        v = vec3(gl_ModelViewMatrix * gl_Vertex);
+        N = normalize(gl_NormalMatrix * gl_Normal);
+
+        gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
+    }
+'''], ['''
+    varying vec3 N;
+    varying vec3 v;
+
+    void main() {
+        vec3 L = normalize(gl_LightSource[0].position.xyz - v);
+        vec3 E = normalize(-v);
+        vec3 R = normalize(-reflect(L, N));
+
+        vec4 Iamb = gl_FrontLightProduct[0].ambient;
+
+        vec4 Idiff = gl_FrontLightProduct[0].diffuse * max(dot(N, L), 0.0);
+        Idiff = clamp(Idiff, 0.0, 1.0);
+
+        vec4 Ispec = gl_FrontLightProduct[0].specular * pow(max(dot(R, E), 0.0), 0.3 * gl_FrontMaterial.shininess);
+        Idiff = clamp(Idiff, 0.0, 1.0);
+
+        gl_FragColor = gl_FrontLightModelProduct.sceneColor + Iamb + Idiff + Ispec;
+    }
+'''], None)
+
 init()
-window = CameraWindow()
-
-keys = key.KeyStateHandler()
-window.push_handlers(keys)
-
-pyglet.app.run()
