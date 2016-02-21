@@ -103,6 +103,7 @@ class VBO:
         glDrawArrays(GL_QUADS, 0, chunk_size ** 2 * 24)
 
 
+# noinspection PyCallingNonCallable
 class Shader:
     def __init__(self, vert=None, frag=None, geom=None):
         self.handle = glCreateProgram()
@@ -159,7 +160,8 @@ class Shader:
     def bind(self):
         glUseProgram(self.handle)
 
-    def unbind(self):
+    @staticmethod
+    def unbind():
         glUseProgram(0)
 
     def uniformf(self, name, *vals):
@@ -178,6 +180,7 @@ class Shader:
         glUniformMatrix4fv(glGetUniformLocation(self.handle, str.encode(name)), 1, False, (GLfloat * len(mat))(*mat))
 
 
+# noinspection PyUnusedLocal
 class Camera(object):
     x, y, z = 0, height_multiplier * 2, 0
     rx, ry = 340, 0
@@ -193,6 +196,7 @@ class Camera(object):
     world_pos = None
     current_chunk = None
     current_tile = None
+    modelview = None
 
     flying = False
 
@@ -251,7 +255,9 @@ class Camera(object):
 
     def mouse_move(self, x, y, dx, dy):
         self.ry -= dx / 4
-        self.rx += dy / 4
+
+        if 270 <= self.rx + dy / 4 <= 450:
+            self.rx += dy / 4
 
         if self.rx < 0:
             self.rx += 360
@@ -262,13 +268,33 @@ class Camera(object):
     def get_world_pos(self):
         modelview = to_gl_float([0] * 16)
         glGetFloatv(GL_MODELVIEW_MATRIX, modelview)
+        self.modelview = [[modelview[w + h * 4] for w in range(4)] for h in range(4)]
 
-        self.world_pos = numpy.dot([0, 0, 0, 1], numpy.linalg.inv([[modelview[w + h * 4] for w in range(4)] for h in range(4)]))[:3]
+        self.world_pos = numpy.dot([0, 0, 0, 1], numpy.linalg.inv(self.modelview))[:3]
         self.current_chunk = (int(math.floor(self.world_pos[0] / chunk_size)), int(math.floor(self.world_pos[2] / chunk_size)))
         self.current_tile = (int(self.world_pos[0] - self.current_chunk[0] * chunk_size), int(self.world_pos[2] - self.current_chunk[1] * chunk_size))
 
+    def hitscan(self):
+        checking_chunk = self.current_chunk
+        checking_tile = self.current_tile
+        checking_height = self.y
+
+        for offset in range(-1, -5, -1):
+            checking_pos = numpy.dot([0, 0, offset, 1], numpy.linalg.inv(self.modelview))
+            checking_height = checking_pos[1]
+            checking_chunk = (int(math.floor(checking_pos[0] / chunk_size)), int(math.floor(checking_pos[2] / chunk_size)))
+            checking_tile = (int(checking_pos[0] - checking_chunk[0] * chunk_size), int(checking_pos[2] - checking_chunk[1] * chunk_size))
+
+            if checking_chunk in active_chunks and checking_tile in chunk_height[checking_chunk]:
+                if chunk_height[checking_chunk][checking_tile] < checking_height:
+                    tile_offset = (checking_tile[0] * chunk_size + checking_tile[1])
+                    print(chunks[checking_chunk].buffer_color)
+                    print("match")
+                    break
+
     def update(self, dt):
         self.get_world_pos()
+        self.hitscan()
 
         try:
             self.key_loop(dt)
@@ -307,6 +333,7 @@ class Camera(object):
         glTranslatef(-self.x, -self.y, -self.z)
 
 
+# noinspection PyCallingNonCallable
 def to_gl_float(data):
     return (GLfloat * len(data))(*data)
 
