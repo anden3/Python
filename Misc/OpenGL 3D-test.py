@@ -32,6 +32,8 @@ cube_normals = [(-1.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, -1.0, 0.0), (0.0, 1.0, 
 
 
 def init():
+    glEnable(GL_CULL_FACE)
+
     glClearDepth(1.0)
 
     glEnable(GL_BLEND)
@@ -192,6 +194,7 @@ class Camera(object):
 
     speed_mult = 5
     camera_height = 2
+    range = 10
 
     world_pos = None
     current_chunk = None
@@ -253,17 +256,47 @@ class Camera(object):
         elif symbol == key.ESCAPE:
             pyglet.app.exit()
 
+    def mouse_click(self, x, y, button, modifiers):
+        hit = self.hitscan()
+
+        if hit is not None:
+            if button == 1:
+                change_block_height(*hit, -1)
+
+            elif button == 4:
+                change_block_height(*hit, 1)
+
+    def mouse_drag(self, x, y, dx, dy, buttons, modifers):
+        hit = self.hitscan()
+
+        if hit is not None:
+            if buttons == 1:
+                change_block_height(*hit, -1)
+
+            elif buttons == 4:
+                change_block_height(*hit, 1)
+
+        self.mouse_move(x, y, dx, dy)
+
     def mouse_move(self, x, y, dx, dy):
         self.ry -= dx / 4
 
-        if 270 <= self.rx + dy / 4 <= 450:
-            self.rx += dy / 4
-
-        if self.rx < 0:
-            self.rx += 360
-
         if self.ry < 0:
             self.ry += 360
+
+        if self.ry > 360:
+            self.ry -= 360
+
+        new_rx = self.rx + dy / 4
+
+        if new_rx < 0:
+            new_rx += 360
+
+        if new_rx > 360:
+            new_rx -= 360
+
+        if 0 <= new_rx <= 90 or 270 <= new_rx <= 360:
+            self.rx = new_rx
 
     def get_world_pos(self):
         modelview = to_gl_float([0] * 16)
@@ -275,26 +308,18 @@ class Camera(object):
         self.current_tile = (int(self.world_pos[0] - self.current_chunk[0] * chunk_size), int(self.world_pos[2] - self.current_chunk[1] * chunk_size))
 
     def hitscan(self):
-        checking_chunk = self.current_chunk
-        checking_tile = self.current_tile
-        checking_height = self.y
-
-        for offset in range(-1, -5, -1):
+        for offset in range(-1, -self.range, -1):
             checking_pos = numpy.dot([0, 0, offset, 1], numpy.linalg.inv(self.modelview))
-            checking_height = checking_pos[1]
+            checking_height = round(checking_pos[1])
             checking_chunk = (int(math.floor(checking_pos[0] / chunk_size)), int(math.floor(checking_pos[2] / chunk_size)))
             checking_tile = (int(checking_pos[0] - checking_chunk[0] * chunk_size), int(checking_pos[2] - checking_chunk[1] * chunk_size))
 
             if checking_chunk in active_chunks and checking_tile in chunk_height[checking_chunk]:
-                if chunk_height[checking_chunk][checking_tile] < checking_height:
-                    tile_offset = (checking_tile[0] * chunk_size + checking_tile[1])
-                    print(chunks[checking_chunk].buffer_color)
-                    print("match")
-                    break
+                if chunk_height[checking_chunk][checking_tile] == checking_height:
+                    return checking_chunk, checking_tile
 
     def update(self, dt):
         self.get_world_pos()
-        self.hitscan()
 
         try:
             self.key_loop(dt)
@@ -338,6 +363,28 @@ def to_gl_float(data):
     return (GLfloat * len(data))(*data)
 
 
+def color_block(chunk, tile, color):
+    chunks[chunk].color()
+    cube_size = 96 * sizeof(c_float)
+    data = to_gl_float([*color] * int(cube_size / 4))
+    glBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * cube_size, cube_size, data)
+
+
+def change_block_height(chunk, tile, dh):
+    tile_height = chunk_height[chunk][tile]
+    cube_size = 72 * sizeof(c_float)
+
+    chunks[chunk].vertex()
+
+    tile_data = to_gl_float([0] * cube_size)
+    glGetBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * cube_size, cube_size, tile_data)
+
+    new_data = to_gl_float([c + dh if c == tile_height else c for c in tile_data])
+    glBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * cube_size, cube_size, new_data)
+
+    chunk_height[chunk][tile] += dh
+
+
 def generate_chunk(cx, cz):
     c_vertices = []
     c_colors = []
@@ -370,6 +417,8 @@ def generate_chunk(cx, cz):
     chunks[(cx, cz)].data(c_vertices, "vertex")
     chunks[(cx, cz)].data(c_colors, "color")
     chunks[(cx, cz)].data(c_normals, "normal")
+
+    chunk_buffer_length[(cx, cz)] = chunk_size ** 2 * 24
 
 
 def add_cube(pos, scale, color, verts, cols, norms):
@@ -421,8 +470,10 @@ class CameraWindow(pyglet.window.Window):
         self.set_exclusive_mouse(True)
 
         self.cam = Camera()
-        self.on_key_press = self.cam.key_down
         self.on_resize = self.cam.view
+        self.on_key_press = self.cam.key_down
+        self.on_mouse_press = self.cam.mouse_click
+        self.on_mouse_drag = self.cam.mouse_drag
         self.on_mouse_motion = self.cam.mouse_move
 
         self.cam.update(0.0)
