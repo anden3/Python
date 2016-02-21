@@ -222,26 +222,26 @@ class Camera(object):
             self.perspective()
 
         if keys[key.W]:
-            self.x -= math.sin(math.radians(self.ry)) * self.speed_mult * dt
-            self.z -= math.cos(math.radians(self.ry)) * self.speed_mult * dt
+            self.vx -= math.sin(math.radians(self.ry)) * self.speed_mult * dt
+            self.vz -= math.cos(math.radians(self.ry)) * self.speed_mult * dt
 
             if self.flying:
                 self.y += math.sin(math.radians(self.rx)) * self.speed_mult * dt
 
         elif keys[key.S]:
-            self.x += math.sin(math.radians(self.ry)) * self.speed_mult * dt
-            self.z += math.cos(math.radians(self.ry)) * self.speed_mult * dt
+            self.vx += math.sin(math.radians(self.ry)) * self.speed_mult * dt
+            self.vz += math.cos(math.radians(self.ry)) * self.speed_mult * dt
 
             if self.flying:
                 self.y -= math.sin(math.radians(self.rx)) * self.speed_mult * dt
 
         if keys[key.D]:
-            self.x += math.cos(math.radians(self.ry)) * self.speed_mult * dt
-            self.z -= math.sin(math.radians(self.ry)) * self.speed_mult * dt
+            self.vx += math.cos(math.radians(self.ry)) * self.speed_mult * dt
+            self.vz -= math.sin(math.radians(self.ry)) * self.speed_mult * dt
 
         elif keys[key.A]:
-            self.x -= math.cos(math.radians(self.ry)) * self.speed_mult * dt
-            self.z += math.sin(math.radians(self.ry)) * self.speed_mult * dt
+            self.vx -= math.cos(math.radians(self.ry)) * self.speed_mult * dt
+            self.vz += math.sin(math.radians(self.ry)) * self.speed_mult * dt
 
     def key_down(self, symbol, modifiers):
         if symbol == key.F:
@@ -293,7 +293,12 @@ class Camera(object):
         else:
             self.vy = 0
 
+        self.x += self.vx
         self.y += self.vy * dt
+        self.z += self.vz
+
+        self.vx = 0
+        self.vz = 0
 
     def apply(self):
         glLoadIdentity()
