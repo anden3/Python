@@ -418,8 +418,6 @@ def generate_chunk(cx, cz):
     chunks[(cx, cz)].data(c_colors, "color")
     chunks[(cx, cz)].data(c_normals, "normal")
 
-    chunk_buffer_length[(cx, cz)] = chunk_size ** 2 * 24
-
 
 def add_cube(pos, scale, color, verts, cols, norms):
     w, h, d = scale
