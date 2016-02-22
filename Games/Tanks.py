@@ -288,8 +288,7 @@ def draw_shells(dt):
 
 
 def get_rotated_coords(x, y, angle):
-    return x + (math.cos(math.radians(angle)) + math.sin(math.radians(angle))) - 1, \
-           y + (-math.sin(math.radians(angle)) + math.cos(math.radians(angle))) - 1
+    return x + (math.cos(math.radians(angle)) + math.sin(math.radians(angle))) - 1, y + (-math.sin(math.radians(angle)) + math.cos(math.radians(angle))) - 1
 
 
 def draw_rect(x, y, sw, sh, c, batch):

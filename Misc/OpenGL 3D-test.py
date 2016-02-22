@@ -45,10 +45,16 @@ def init():
     glShadeModel(GL_SMOOTH)
     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST)
 
-    global window, keys
+    global window, keys, texture
     window = CameraWindow()
     keys = key.KeyStateHandler()
     window.push_handlers(keys)
+
+    texture = pyglet.resource.texture("images/dirt.png").get_texture()
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
 
     pyglet.app.run()
 
@@ -58,14 +64,19 @@ class VBO:
         self.vertex_buffer_set = False
         self.color_buffer_set = False
         self.normal_buffer_set = False
+        self.texture_buffer_set = False
 
         self.buffer_vertex = GLuint(0)
         self.buffer_color = GLuint(0)
         self.buffer_normal = GLuint(0)
+        self.buffer_texture_coords = GLuint(0)
+        self.buffer_texture = GLuint(0)
 
         glGenBuffers(1, self.buffer_vertex)
         glGenBuffers(1, self.buffer_color)
         glGenBuffers(1, self.buffer_normal)
+        glGenBuffers(1, self.buffer_texture_coords)
+        glGenTextures(0, byref(self.buffer_texture))
 
     def data(self, data, buffer_type):
         if buffer_type == "vertex":
@@ -80,7 +91,16 @@ class VBO:
             self.normal_buffer_set = True
             glBindBuffer(GL_ARRAY_BUFFER, self.buffer_normal)
 
-        glBufferData(GL_ARRAY_BUFFER, len(data) * 4, to_gl_float(data), GL_STATIC_DRAW)
+        elif buffer_type == "texture":
+            self.texture_buffer_set = True
+            glBindTexture(texture.target, texture.id)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 16, 16, 0, GL_RGB, GL_UNSIGNED_BYTE, data)
+            return
+
+        elif buffer_type == "texture_coords":
+            glBindBuffer(GL_ARRAY_BUFFER, self.buffer_texture_coords)
+
+        glBufferData(GL_ARRAY_BUFFER, len(data) * 4, to_gl_float(data), GL_DYNAMIC_DRAW)
 
     def vertex(self):
         glBindBuffer(GL_ARRAY_BUFFER, self.buffer_vertex)
@@ -94,13 +114,28 @@ class VBO:
         glBindBuffer(GL_ARRAY_BUFFER, self.buffer_normal)
         glNormalPointer(GL_FLOAT, 0, 0)
 
+    def texture(self):
+        glBindBuffer(GL_ARRAY_BUFFER, self.buffer_texture_coords)
+        glTexCoordPointer(3, GL_FLOAT, 0, 0)
+
     def draw(self):
         if self.vertex_buffer_set:
+            glEnableClientState(GL_VERTEX_ARRAY)
             self.vertex()
+
         if self.color_buffer_set:
+            glEnableClientState(GL_COLOR_ARRAY)
             self.color()
+
         if self.normal_buffer_set:
+            glEnableClientState(GL_NORMAL_ARRAY)
             self.normal()
+
+        if self.texture_buffer_set:
+            glEnableClientState(GL_TEXTURE_COORD_ARRAY)
+            glEnable(GL_TEXTURE_2D)
+            glBindTexture(texture.target, texture.id)
+            self.texture()
 
         glDrawArrays(GL_QUADS, 0, chunk_size ** 2 * 24)
 
@@ -194,7 +229,7 @@ class Camera(object):
 
     speed_mult = 5
     camera_height = 2
-    range = 10
+    range = 5
 
     world_pos = None
     current_chunk = None
@@ -253,6 +288,7 @@ class Camera(object):
     def key_down(self, symbol, modifiers):
         if symbol == key.F:
             self.flying = not self.flying
+
         elif symbol == key.ESCAPE:
             pyglet.app.exit()
 
@@ -267,6 +303,9 @@ class Camera(object):
                 change_block_height(*hit, 1)
 
     def mouse_drag(self, x, y, dx, dy, buttons, modifers):
+        self.mouse_move(x, y, dx, dy)
+
+        '''
         hit = self.hitscan()
 
         if hit is not None:
@@ -275,8 +314,7 @@ class Camera(object):
 
             elif buttons == 4:
                 change_block_height(*hit, 1)
-
-        self.mouse_move(x, y, dx, dy)
+        '''
 
     def mouse_move(self, x, y, dx, dy):
         self.ry -= dx / 4
@@ -310,12 +348,11 @@ class Camera(object):
     def hitscan(self):
         for offset in range(-1, -self.range, -1):
             checking_pos = numpy.dot([0, 0, offset, 1], numpy.linalg.inv(self.modelview))
-            checking_height = round(checking_pos[1])
             checking_chunk = (int(math.floor(checking_pos[0] / chunk_size)), int(math.floor(checking_pos[2] / chunk_size)))
             checking_tile = (int(checking_pos[0] - checking_chunk[0] * chunk_size), int(checking_pos[2] - checking_chunk[1] * chunk_size))
 
             if checking_chunk in active_chunks and checking_tile in chunk_height[checking_chunk]:
-                if chunk_height[checking_chunk][checking_tile] == checking_height:
+                if chunk_height[checking_chunk][checking_tile] >= round(checking_pos[1]):
                     return checking_chunk, checking_tile
 
     def update(self, dt):
@@ -363,11 +400,28 @@ def to_gl_float(data):
     return (GLfloat * len(data))(*data)
 
 
+def get_block_color(chunk, tile):
+    chunks[chunk].color()
+
+    buffer_pointer = cast(glMapBufferRange(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * 384, 4, GL_MAP_READ_BIT), POINTER(c_float))
+    buffer_array = numpy.ctypeslib.as_array(buffer_pointer, (4, ))
+    glUnmapBuffer(GL_ARRAY_BUFFER)
+
+    return numpy.array(buffer_array)
+
+
 def color_block(chunk, tile, color):
     chunks[chunk].color()
-    cube_size = 96 * sizeof(c_float)
-    data = to_gl_float([*color] * int(cube_size / 4))
-    glBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * cube_size, cube_size, data)
+
+    buffer_pointer = cast(glMapBufferRange(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * 384, 96, GL_MAP_WRITE_BIT), POINTER(c_float))
+    buffer_array = numpy.ctypeslib.as_array(buffer_pointer, (96, ))
+    buffer_array[0:96] = to_gl_float([*color] * 24)
+    glUnmapBuffer(GL_ARRAY_BUFFER)
+
+    '''
+    data = to_gl_float([*color] * 96)
+    glBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * 384, 384, data)
+    '''
 
 
 def change_block_height(chunk, tile, dh):
@@ -389,6 +443,7 @@ def generate_chunk(cx, cz):
     c_vertices = []
     c_colors = []
     c_normals = []
+    c_textures = []
 
     chunk_height[(cx, cz)] = {}
 
@@ -411,29 +466,43 @@ def generate_chunk(cx, cz):
             cube_height = round((noise_height + 1) * height_multiplier)
             chunk_height[(cx, cz)][(sx, sz)] = cube_height
 
-            add_cube((x, 0, z), (1, cube_height, 1), cube_color, c_vertices, c_colors, c_normals)
+            add_cube((x, 0, z), (1, cube_height, 1), cube_color, c_vertices, c_colors, c_normals, c_textures)
 
     chunks[(cx, cz)] = VBO()
     chunks[(cx, cz)].data(c_vertices, "vertex")
     chunks[(cx, cz)].data(c_colors, "color")
     chunks[(cx, cz)].data(c_normals, "normal")
+    chunks[(cx, cz)].data(texture.get_image_data().get_data("RGB", 16 * 3), "texture")
+    chunks[(cx, cz)].data(c_textures, "texture_coords")
 
 
-def add_cube(pos, scale, color, verts, cols, norms):
+def add_cube(pos, scale, color, verts, cols, norms, texts):
+    tex_coords = [
+        (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, -scale[1], 0.0), (0.0, -scale[1], 0.0),     # Left
+        (scale[1], 0.0, 0.0), (scale[1], 1.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 0.0),       # Right
+        (1.0, 1.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 0.0), (1.0, 0.0, 0.0),                 # Bottom
+        (0.0, 1.0, 0.0), (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0),                 # Top
+        (0.0, 0.0, 1.0), (1.0, 0.0, 1.0), (1.0, scale[1], 1.0), (0.0, scale[1], 1.0),       # Front
+        (1.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, scale[1], 0.0), (1.0, scale[1], 0.0)        # Back
+    ]
+
     w, h, d = scale
 
     vertices = []
     colors = []
     normals = []
+    textures = []
 
     for i, (sx, sy, sz) in enumerate(cube_signs):
         vertices.extend([pos[0] + (w * sx), pos[1] + (h * sy), pos[2] + (d * sz)])
         colors.extend([*color])
         normals.extend([*cube_normals[i // 4]])
+        textures.extend([*tex_coords[i]])
 
     verts.extend(vertices)
     cols.extend(colors)
     norms.extend(normals)
+    texts.extend(textures)
 
 
 def render_light(pos, direction, angle, attenuation=0):
@@ -494,10 +563,6 @@ class CameraWindow(pyglet.window.Window):
         glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE)
         glEnable(GL_COLOR_MATERIAL)
 
-        glEnableClientState(GL_VERTEX_ARRAY)
-        glEnableClientState(GL_COLOR_ARRAY)
-        glEnableClientState(GL_NORMAL_ARRAY)
-
         check_draw_distance()
 
         # shader1.bind()
@@ -508,34 +573,20 @@ class CameraWindow(pyglet.window.Window):
         # shader1.unbind()
 
 shader1 = Shader(['''
-    varying vec3 N;
-    varying vec3 v;
 
-    void main() {
-        v = vec3(gl_ModelViewMatrix * gl_Vertex);
-        N = normalize(gl_NormalMatrix * gl_Normal);
+void main() {
+    gl_TexCoord[0] = gl_MultiTexCoord0;
+    gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
+}
 
-        gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
-    }
 '''], ['''
-    varying vec3 N;
-    varying vec3 v;
 
-    void main() {
-        vec3 L = normalize(gl_LightSource[0].position.xyz - v);
-        vec3 E = normalize(-v);
-        vec3 R = normalize(-reflect(L, N));
+uniform sampler2D tex0;
 
-        vec4 Iamb = gl_FrontLightProduct[0].ambient;
+void main() {
+    gl_FragColor = texture2D(tex0, gl_TexCoord[0].st);
+}
 
-        vec4 Idiff = gl_FrontLightProduct[0].diffuse * max(dot(N, L), 0.0);
-        Idiff = clamp(Idiff, 0.0, 1.0);
-
-        vec4 Ispec = gl_FrontLightProduct[0].specular * pow(max(dot(R, E), 0.0), 0.3 * gl_FrontMaterial.shininess);
-        Idiff = clamp(Idiff, 0.0, 1.0);
-
-        gl_FragColor = gl_FrontLightModelProduct.sceneColor + Iamb + Idiff + Ispec;
-    }
 '''], None)
 
 init()
