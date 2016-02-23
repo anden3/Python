@@ -5,8 +5,11 @@ from ctypes import *
 import noise
 import numpy
 import pyglet
+from get_time import Time
 from pyglet.gl import *
 from pyglet.window import key
+
+time = Time()
 
 chunks = {}
 chunk_height = {}
@@ -54,7 +57,6 @@ def init():
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
 
     pyglet.app.run()
 
@@ -93,8 +95,9 @@ class VBO:
 
         elif buffer_type == "texture":
             self.texture_buffer_set = True
-            glBindTexture(texture.target, texture.id)
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 16, 16, 0, GL_RGB, GL_UNSIGNED_BYTE, data)
+            glBindTexture(data.target, data.id)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 16, 16, 0, GL_RGB, GL_UNSIGNED_BYTE, data.get_image_data().get_data("RGB", 16 * 3))
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
             return
 
         elif buffer_type == "texture_coords":
@@ -234,7 +237,12 @@ class Camera(object):
     world_pos = None
     current_chunk = None
     current_tile = None
+    direction = None
+
     modelview = None
+
+    last_hit = None
+    last_hit_color = None
 
     flying = False
 
@@ -290,6 +298,9 @@ class Camera(object):
             self.flying = not self.flying
 
         elif symbol == key.ESCAPE:
+            time.get("average")
+            time.get("max")
+            time.get("min")
             pyglet.app.exit()
 
     def mouse_click(self, x, y, button, modifiers):
@@ -305,18 +316,20 @@ class Camera(object):
     def mouse_drag(self, x, y, dx, dy, buttons, modifers):
         self.mouse_move(x, y, dx, dy)
 
-        '''
+    def mouse_move(self, x, y, dx, dy):
         hit = self.hitscan()
 
-        if hit is not None:
-            if buttons == 1:
-                change_block_height(*hit, -1)
+        if hit is not None and hit != self.last_hit:
+            if self.last_hit is not None:
+                color_block(*self.last_hit, self.last_hit_color)
+                self.last_hit = None
+                self.last_hit_color = None
 
-            elif buttons == 4:
-                change_block_height(*hit, 1)
-        '''
+            else:
+                self.last_hit = hit
+                self.last_hit_color = get_block_color(*hit)
+                color_block(*hit, (0.0, 1.0, 0.0, 1.0))
 
-    def mouse_move(self, x, y, dx, dy):
         self.ry -= dx / 4
 
         if self.ry < 0:
@@ -342,18 +355,44 @@ class Camera(object):
         self.modelview = [[modelview[w + h * 4] for w in range(4)] for h in range(4)]
 
         self.world_pos = numpy.dot([0, 0, 0, 1], numpy.linalg.inv(self.modelview))[:3]
-        self.current_chunk = (int(math.floor(self.world_pos[0] / chunk_size)), int(math.floor(self.world_pos[2] / chunk_size)))
-        self.current_tile = (int(self.world_pos[0] - self.current_chunk[0] * chunk_size), int(self.world_pos[2] - self.current_chunk[1] * chunk_size))
+        self.current_chunk, self.current_tile = get_chunk_pos(self.world_pos)
 
     def hitscan(self):
         for offset in range(-1, -self.range, -1):
             checking_pos = numpy.dot([0, 0, offset, 1], numpy.linalg.inv(self.modelview))
-            checking_chunk = (int(math.floor(checking_pos[0] / chunk_size)), int(math.floor(checking_pos[2] / chunk_size)))
-            checking_tile = (int(checking_pos[0] - checking_chunk[0] * chunk_size), int(checking_pos[2] - checking_chunk[1] * chunk_size))
+            checking_chunk, checking_tile = get_chunk_pos(checking_pos)
 
             if checking_chunk in active_chunks and checking_tile in chunk_height[checking_chunk]:
                 if chunk_height[checking_chunk][checking_tile] >= round(checking_pos[1]):
                     return checking_chunk, checking_tile
+
+    def check_in_front(self):
+        check_pos = self.world_pos
+        check_pos[1] -= 1
+
+        if self.vx != 0 or self.vz != 0:
+            if abs(self.vx) > abs(self.vz):
+                if self.vx > 0:
+                    self.direction = "+X"
+                    check_pos[0] += 1
+                else:
+                    self.direction = "-X"
+                    check_pos[0] -= 1
+            else:
+                if self.vz > 0:
+                    self.direction = "+Z"
+                    check_pos[2] += 1
+                else:
+                    self.direction = "-Z"
+                    check_pos[2] -= 1
+        else:
+            self.direction = None
+
+        if self.direction is not None:
+            if math.sqrt((int(check_pos[0]) - self.world_pos[0]) ** 2 + (int(check_pos[2]) - self.world_pos[2]) ** 2 <= 0.2):
+                checking_chunk, checking_tile = get_chunk_pos(check_pos)
+
+                return chunk_height[checking_chunk][checking_tile] >= self.world_pos[1]
 
     def update(self, dt):
         self.get_world_pos()
@@ -381,6 +420,10 @@ class Camera(object):
         else:
             self.vy = 0
 
+        if self.check_in_front():
+            self.vx = 0
+            self.vz = 0
+
         self.x += self.vx
         self.y += self.vy * dt
         self.z += self.vz
@@ -403,25 +446,16 @@ def to_gl_float(data):
 def get_block_color(chunk, tile):
     chunks[chunk].color()
 
-    buffer_pointer = cast(glMapBufferRange(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * 384, 4, GL_MAP_READ_BIT), POINTER(c_float))
-    buffer_array = numpy.ctypeslib.as_array(buffer_pointer, (4, ))
-    glUnmapBuffer(GL_ARRAY_BUFFER)
-
-    return numpy.array(buffer_array)
+    data = to_gl_float([0] * 4)
+    glGetBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * 384, 16, data)
+    return list(data)
 
 
 def color_block(chunk, tile, color):
     chunks[chunk].color()
 
-    buffer_pointer = cast(glMapBufferRange(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * 384, 96, GL_MAP_WRITE_BIT), POINTER(c_float))
-    buffer_array = numpy.ctypeslib.as_array(buffer_pointer, (96, ))
-    buffer_array[0:96] = to_gl_float([*color] * 24)
-    glUnmapBuffer(GL_ARRAY_BUFFER)
-
-    '''
     data = to_gl_float([*color] * 96)
     glBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * 384, 384, data)
-    '''
 
 
 def change_block_height(chunk, tile, dh):
@@ -437,6 +471,13 @@ def change_block_height(chunk, tile, dh):
     glBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * cube_size, cube_size, new_data)
 
     chunk_height[chunk][tile] += dh
+
+
+def get_chunk_pos(pos):
+    chunk = (int(math.floor(pos[0] / chunk_size)), int(math.floor(pos[2] / chunk_size)))
+    tile = (int(pos[0] - chunk[0] * chunk_size), int(pos[2] - chunk[1] * chunk_size))
+
+    return chunk, tile
 
 
 def generate_chunk(cx, cz):
@@ -472,7 +513,7 @@ def generate_chunk(cx, cz):
     chunks[(cx, cz)].data(c_vertices, "vertex")
     chunks[(cx, cz)].data(c_colors, "color")
     chunks[(cx, cz)].data(c_normals, "normal")
-    chunks[(cx, cz)].data(texture.get_image_data().get_data("RGB", 16 * 3), "texture")
+    chunks[(cx, cz)].data(texture, "texture")
     chunks[(cx, cz)].data(c_textures, "texture_coords")
 
 
