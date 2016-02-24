@@ -5,15 +5,16 @@ from ctypes import *
 import noise
 import numpy
 import pyglet
-from get_time import Time
 from pyglet.gl import *
 from pyglet.window import key
+
+from get_time import *
+
+# from gl_shader import Shader
 
 time = Time()
 
 chunks = {}
-chunk_height = {}
-chunk_color = {}
 active_chunks = set()
 
 chunk_size = 16
@@ -45,7 +46,7 @@ cube_normals = [
 
 
 def init():
-    glEnable(GL_CULL_FACE)
+    config_time(silent=True)
 
     glClearDepth(1.0)
 
@@ -57,6 +58,7 @@ def init():
     glDepthFunc(GL_LEQUAL)
     glShadeModel(GL_SMOOTH)
     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST)
+    glEnable(GL_CULL_FACE)
 
     global window, keys, texture
     window = CameraWindow()
@@ -157,83 +159,6 @@ class VBO:
         glDrawArrays(GL_QUADS, 0, self.vertex_count)
 
 
-# noinspection PyCallingNonCallable
-class Shader:
-    def __init__(self, vert=None, frag=None, geom=None):
-        self.handle = glCreateProgram()
-        self.linked = False
-
-        if vert is not None:
-            self.create_shader(vert, GL_VERTEX_SHADER)
-
-        if frag is not None:
-            self.create_shader(frag, GL_FRAGMENT_SHADER)
-
-        if geom is not None:
-            self.create_shader(frag, GL_GEOMETRY_SHADER_EXT)
-
-        self.link()
-
-    def create_shader(self, strings, shader_type):
-        count = len(strings)
-
-        if count < 1:
-            return
-
-        byte_strings = [str.encode(s) for s in strings]
-
-        shader = glCreateShader(shader_type)
-        src = (c_char_p * count)(*byte_strings)
-        glShaderSource(shader, count, cast(pointer(src), POINTER(POINTER(c_char))), None)
-
-        glCompileShader(shader)
-        temp = c_int(0)
-        glGetShaderiv(shader, GL_COMPILE_STATUS, byref(temp))
-
-        if not temp:
-            glGetShaderiv(shader, GL_INFO_LOG_LENGTH, byref(temp))
-            buffer = create_string_buffer(temp.value)
-            glGetShaderInfoLog(shader, temp, None, buffer)
-            print(buffer.value)
-        else:
-            glAttachShader(self.handle, shader)
-
-    def link(self):
-        glLinkProgram(self.handle)
-        temp = c_int(0)
-        glGetProgramiv(self.handle, GL_LINK_STATUS, byref(temp))
-
-        if not temp:
-            glGetProgramiv(self.handle, GL_INFO_LOG_LENGTH, byref(temp))
-            buffer = create_string_buffer(temp.value)
-            glGetProgramInfoLog(self.handle, temp, None, buffer)
-            print(buffer.value)
-        else:
-            self.linked = True
-
-    def bind(self):
-        glUseProgram(self.handle)
-
-    @staticmethod
-    def unbind():
-        glUseProgram(0)
-
-    def uniformf(self, name, *vals):
-        if len(vals) in range(1, 5):
-            {
-                1: glUniform1f, 2: glUniform2f, 3: glUniform3f, 4: glUniform4f
-            }[len(vals)](glGetUniformLocation(self.handle, str.encode(name)), *vals)
-
-    def uniformi(self, name, *vals):
-        if len(vals) in range(1, 5):
-            {
-                1: glUniform1i, 2: glUniform2i, 3: glUniform3i, 4: glUniform4i
-            }[len(vals)](glGetUniformLocation(self.handle, str.encode(name)), *vals)
-
-    def uniform_matrixf(self, name, mat):
-        glUniformMatrix4fv(glGetUniformLocation(self.handle, str.encode(name)), 1, False, (GLfloat * len(mat))(*mat))
-
-
 # noinspection PyUnusedLocal
 class Camera(object):
     x, y, z = 0, height_multiplier * 2, 0
@@ -315,17 +240,13 @@ class Camera(object):
             time.get("average")
             time.get("max")
             time.get("min")
+
+            get_function_avg()
+
             pyglet.app.exit()
 
     def mouse_click(self, x, y, button, modifiers):
-        hit = self.hitscan()
-
-        if hit is not None:
-            if button == 1:
-                change_block_height(*hit, -1)
-
-            elif button == 4:
-                change_block_height(*hit, 1)
+        pass
 
     def mouse_drag(self, x, y, dx, dy, buttons, modifers):
         self.mouse_move(x, y, dx, dy)
@@ -363,8 +284,8 @@ class Camera(object):
             checking_pos = numpy.dot([0, 0, offset, 1], numpy.linalg.inv(self.modelview))
             checking_chunk, checking_tile = get_chunk_pos(checking_pos)
 
-            if checking_chunk in active_chunks and checking_tile in chunk_height[checking_chunk]:
-                if chunk_height[checking_chunk][checking_tile] >= round(checking_pos[1]):
+            if checking_chunk in active_chunks and checking_tile in chunks[checking_chunk].blocks:
+                if chunks[checking_chunk].blocks[checking_tile]['position'][1] >= round(checking_pos[1]):
                     return checking_chunk, checking_tile
 
     def update(self, dt):
@@ -375,8 +296,8 @@ class Camera(object):
         except NameError:
             pass
 
-        if not self.flying and self.current_chunk in active_chunks and self.current_tile in chunk_height[self.current_chunk]:
-            height_diff = self.y - chunk_height[self.current_chunk][self.current_tile] - self.camera_height - 1
+        if not self.flying and self.current_chunk in active_chunks and self.current_tile in chunks[self.current_chunk].blocks:
+            height_diff = self.y - chunks[self.current_chunk].blocks[self.current_tile]['position'][1] - self.camera_height - 1
 
             if abs(height_diff) < 0.01:
                 self.vy = 0
@@ -407,39 +328,135 @@ class Camera(object):
         glTranslatef(-self.x, -self.y, -self.z)
 
 
+class Chunk:
+    def __init__(self, pos):
+        self.pos = pos
+        self.cx, self.cz = pos
+
+        self.vbo = VBO()
+        self.blocks = {}
+
+        self.is_meshed = False
+
+    def generate(self):
+        for sx in range(chunk_size):
+            for sz in range(chunk_size):
+                x = sx + self.pos[0] * chunk_size
+                z = sz + self.pos[1] * chunk_size
+
+                noise_height = noise.snoise3(x / zoom, z / zoom, seed, octaves=3)
+                height = round((noise_height + 1) * height_multiplier)
+
+                cube_color = None
+
+                if -1.0 <= noise_height < -0.33:
+                    cube_color = (0.0, 0.0, 0.5, 1.0)
+                elif -0.33 <= noise_height < -0.11:
+                    cube_color = (0.76, 0.70, 0.50, 1.0)
+                elif -0.11 <= noise_height < 0.66:
+                    cube_color = (0.0, 0.5, 0.0, 1.0)
+                elif 0.66 <= noise_height <= 1.0:
+                    cube_color = (0.8, 0.8, 0.8, 1.0)
+
+                '''
+                for y in range(height):
+                    self.blocks[(sx, y, sz)] = {
+                        'position': (sx, y, sz),
+                        'world_pos': (x, y, z),
+                        'color': cube_color
+                    }
+                '''
+
+                self.blocks[(sx, sz)] = {
+                    'position': (sx, height, sz),
+                    'world_pos': (x, height, z),
+                    'color': cube_color
+                }
+
+    def mesh(self):
+        c_vertices = []
+        c_colors = []
+        c_normals = []
+        c_textures = []
+
+        for gx in [-1, 0, 1]:
+            for gz in [-1, 0, 1]:
+                chunk_pos = (self.cx + gx, self.cz + gz)
+
+                if chunk_pos != self.pos and chunk_pos not in chunks:
+                    chunks[chunk_pos] = Chunk(chunk_pos)
+                    chunks[chunk_pos].generate()
+
+        for block in self.blocks.values():
+            x, y, z = block['world_pos']
+            sx, sy, sz = block['position']
+
+            arguments = (block['color'], c_vertices, c_colors, c_normals, c_textures)
+
+            add_face((x, y, z), 'top', (1.0, 1.0, 1.0), *arguments)
+
+            tests = [sx > 0, sx < chunk_size - 1, sz > 0, sz < chunk_size - 1]
+
+            values = [(sx - 1, sz), (sx + 1, sz), (sx, sz - 1), (sx, sz + 1)]
+            values2 = [(self.cx - 1, self.cz), (self.cx + 1, self.cz), (self.cx, self.cz - 1), (self.cx, self.cz + 1)]
+            values3 = [(chunk_size - 1, sz), (0, sz), (sx, chunk_size - 1), (sx, 0)]
+
+            faces = ['left', 'right', 'back', 'front']
+
+            for i, test in enumerate(tests):
+                if test:
+                    test_height = self.blocks[values[i]]['position'][1]
+                    height_diff = sy - test_height
+
+                    if height_diff > 0:
+                        add_face((x, (y + 1) - height_diff, z), faces[i], (1.0, height_diff, 1.0), *arguments)
+                else:
+                    test_height = chunks[values2[i]].blocks[values3[i]]['position'][1]
+                    height_diff = sy - test_height
+
+                    if height_diff > 0:
+                        add_face((x, (y + 1) - height_diff, z), faces[i], (1.0, height_diff, 1.0), *arguments)
+
+        self.vbo.data(c_vertices, "vertex")
+        self.vbo.data(c_colors, "color")
+        self.vbo.data(c_normals, "normal")
+        self.vbo.data(texture, "texture")
+        self.vbo.data(c_textures, "texture_coords")
+
+        self.is_meshed = True
+
+    def get_color(self, tile):
+        self.vbo.color()
+
+        data = to_gl_float([0] * 4)
+        glGetBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * 384, 16, data)
+        return list(data)
+
+    def set_color(self, tile, color):
+        self.vbo.color()
+
+        data = to_gl_float([*color] * 96)
+        glBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * 384, 384, data)
+
+    def change_height(self, tile, height_diff):
+        tile_height = self.blocks[tile]['position'][1]
+        cube_size = 72 * sizeof(c_float)
+
+        self.vbo.vertex()
+
+        tile_data = to_gl_float([0] * cube_size)
+        glGetBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * cube_size, cube_size, tile_data)
+
+        new_data = to_gl_float([c + height_diff if c == tile_height else c for c in tile_data])
+        glBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * cube_size, cube_size, new_data)
+
+        self.blocks[tile]['position'][1] += height_diff
+        self.blocks[tile]['world_pos'][1] += height_diff
+
+
 # noinspection PyCallingNonCallable
 def to_gl_float(data):
     return (GLfloat * len(data))(*data)
-
-
-def get_block_color(chunk, tile):
-    chunks[chunk].color()
-
-    data = to_gl_float([0] * 4)
-    glGetBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * 384, 16, data)
-    return list(data)
-
-
-def color_block(chunk, tile, color):
-    chunks[chunk].color()
-
-    data = to_gl_float([*color] * 96)
-    glBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * 384, 384, data)
-
-
-def change_block_height(chunk, tile, dh):
-    tile_height = chunk_height[chunk][tile]
-    cube_size = 72 * sizeof(c_float)
-
-    chunks[chunk].vertex()
-
-    tile_data = to_gl_float([0] * cube_size)
-    glGetBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * cube_size, cube_size, tile_data)
-
-    new_data = to_gl_float([c + dh if c == tile_height else c for c in tile_data])
-    glBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[1]) * cube_size, cube_size, new_data)
-
-    chunk_height[chunk][tile] += dh
 
 
 def get_chunk_pos(pos):
@@ -447,81 +464,6 @@ def get_chunk_pos(pos):
     tile = (int(pos[0] - chunk[0] * chunk_size), int(pos[2] - chunk[1] * chunk_size))
 
     return chunk, tile
-
-
-def generate_chunk(cx, cz):
-    chunk_height[(cx, cz)] = {}
-    chunk_color[(cx, cz)] = {}
-
-    for sx in range(chunk_size):
-        for sz in range(chunk_size):
-            x = sx + cx * chunk_size
-            z = sz + cz * chunk_size
-            noise_height = noise.snoise3(x / zoom, z / zoom, seed, octaves=3)
-            cube_color = None
-
-            if -1.0 <= noise_height < -0.33:
-                cube_color = (0.0, 0.0, 0.5, 1.0)
-            elif -0.33 <= noise_height < -0.11:
-                cube_color = (0.76, 0.70, 0.50, 1.0)
-            elif -0.11 <= noise_height < 0.66:
-                cube_color = (0.0, 0.5, 0.0, 1.0)
-            elif 0.66 <= noise_height <= 1.0:
-                cube_color = (0.8, 0.8, 0.8, 1.0)
-
-            chunk_color[(cx, cz)][(sx, sz)] = cube_color
-
-            cube_height = round((noise_height + 1) * height_multiplier)
-            chunk_height[(cx, cz)][(sx, sz)] = cube_height
-
-
-def mesh_chunk(cx, cz):
-    local_height = chunk_height[(cx, cz)]
-
-    c_vertices = []
-    c_colors = []
-    c_normals = []
-    c_textures = []
-
-    for gx in [-1, 0, 1]:
-        for gz in [-1, 0, 1]:
-            if (cx + gx, cz + gz) != (cx, cz):
-                if (cx + gx, cz + gz) not in chunk_height.keys():
-                    generate_chunk(cx + gx, cz + gz)
-
-    for sx in range(chunk_size):
-        for sz in range(chunk_size):
-            x = (sx + cx * chunk_size)
-            z = (sz + cz * chunk_size)
-            height = local_height[(sx, sz)]
-            arguments = (chunk_color[(cx, cz)][(sx, sz)], c_vertices, c_colors, c_normals, c_textures)
-
-            add_face((x, height, z), "top", (1.0, 1.0, 1.0), *arguments)
-
-            tests = [sx > 0, sx < chunk_size - 1, sz > 0, sz < chunk_size - 1]
-
-            values = [(sx - 1, sz), (sx + 1, sz), (sx, sz - 1), (sx, sz + 1)]
-            values2 = [(cx - 1, cz), (cx + 1, cz), (cx, cz - 1), (cx, cz + 1)]
-            values3 = [(chunk_size - 1, sz), (0, sz), (sx, chunk_size - 1), (sx, 0)]
-
-            faces = ["left", "right", "back", "front"]
-
-            for i, test in enumerate(tests):
-                if test:
-                    if local_height[values[i]] < height:
-                        height_diff = height - local_height[values[i]]
-                        add_face((x, (height + 1) - height_diff, z), faces[i], (1.0, height_diff, 1.0), *arguments)
-                else:
-                    if chunk_height[values2[i]][values3[i]] < height:
-                        height_diff = height - chunk_height[values2[i]][values3[i]]
-                        add_face((x, (height + 1) - height_diff, z), faces[i], (1.0, height_diff, 1.0), *arguments)
-
-    chunks[(cx, cz)] = VBO()
-    chunks[(cx, cz)].data(c_vertices, "vertex")
-    chunks[(cx, cz)].data(c_colors, "color")
-    chunks[(cx, cz)].data(c_normals, "normal")
-    chunks[(cx, cz)].data(texture, "texture")
-    chunks[(cx, cz)].data(c_textures, "texture_coords")
 
 
 def add_cube(pos, scale, color, verts, cols, norms, texts):
@@ -603,9 +545,15 @@ def check_draw_distance():
 
     for cx in range(current_chunk[0] - render_distance, current_chunk[0] + render_distance + 1):
         for cz in range(current_chunk[1] - render_distance, current_chunk[1] + render_distance + 1):
-            if (cx, cz) not in chunks:
-                generate_chunk(cx, cz)
-                mesh_chunk(cx, cz)
+            pos = (cx, cz)
+
+            if pos not in chunks:
+                chunks[pos] = Chunk(pos)
+                chunks[pos].generate()
+                chunks[pos].mesh()
+
+            elif not chunks[pos].is_meshed:
+                chunks[pos].mesh()
 
             active_chunks.add((cx, cz))
 
@@ -648,6 +596,6 @@ class CameraWindow(pyglet.window.Window):
         check_draw_distance()
 
         for chunk in active_chunks:
-            chunks[chunk].draw()
+            chunks[chunk].vbo.draw()
 
 init()

@@ -4,6 +4,12 @@ from time import perf_counter
 spacing = 40
 units = ['s', 'ms.', 'μs.', 'ns.']
 
+function_times = {}
+
+config = {
+    "silent": False
+}
+
 
 class Time:
     def __init__(self):
@@ -41,6 +47,44 @@ class Time:
                 print_converted(self.timings[self.count], "Loop " + str(self.count))
 
 
+def config_time(**kwargs):
+    for key, value in kwargs.items():
+        if key in config:
+            config[key] = value
+
+
+def time_function(f):
+    def f_timer(*args, **kwargs):
+        t1 = perf_counter()
+        result = f(*args, **kwargs)
+        t2 = perf_counter()
+
+        t = abs(t2 - t1)
+
+        if f.__name__ not in function_times:
+            function_times[f.__name__] = [t]
+        else:
+            function_times[f.__name__].append(t)
+
+        if not config["silent"]:
+            print_converted(t, f.__name__)
+        return result
+
+    return f_timer
+
+
+def get_function_avg(name=None):
+    if len(function_times) > 0:
+        print()
+
+        if name is not None and name in function_times:
+            print_converted(sum(function_times[name]) / len(function_times[name]), name + " Average")
+
+        else:
+            for function in function_times:
+                print_converted(sum(function_times[function]) / len(function_times[function]), function + " Average")
+
+
 def print_converted(t, text=None):
     unit = None
 
@@ -63,5 +107,10 @@ def print_converted(t, text=None):
     else:
         desc = "Time Taken:"
 
+    value = str(round(t, 3))
+
+    if len(value) < 7:
+        value += '0' * (7 - len(value))
+
     desc += ''.join(['\t'] * ceil((spacing - len(desc)) / 4))
-    print(desc, round(t, 3), unit)
+    print(desc, value, unit)
