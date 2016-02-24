@@ -248,7 +248,7 @@ class Camera(object):
     def mouse_click(self, x, y, button, modifiers):
         hit = self.hitscan()
 
-        print(chunks[hit[0]].get_color(hit[1]))
+        chunks[hit[0]].set_color(hit[1], (1.0, 1.0, 1.0, 1.0))
 
     def mouse_drag(self, x, y, dx, dy, buttons, modifers):
         self.mouse_move(x, y, dx, dy)
@@ -338,13 +338,11 @@ class Chunk:
         self.heightmap = {}
         self.blocks = {}
 
-        self.vertices = []
+        self.offset = 0
 
         self.is_meshed = False
 
     def generate(self):
-        vertex_offset = 0
-
         for sx in range(chunk_size):
             for sz in range(chunk_size):
                 x = sx + self.pos[0] * chunk_size
@@ -371,15 +369,9 @@ class Chunk:
                         'position': (sx, y, sz),
                         'world_pos': (x, y, z),
                         'color': cube_color,
-                        'offset': vertex_offset
+                        'offset': 0,
+                        'faces': [0, 0, 0, 0, 0, 0]
                     }
-
-                    vertex_offset += 24
-
-                if height < height_multiplier:
-                    vertex_offset += 24 * (height_multiplier - height)
-
-        self.vertices = numpy.zeros((vertex_offset + 24) * 3)
 
     def mesh(self):
         c_colors = []
@@ -400,11 +392,11 @@ class Chunk:
                 block = self.blocks[(sx, sy, sz)]
 
                 x, y, z = block['world_pos']
-                offset = block['offset']
 
-                arguments = (block['color'], self.vertices, c_colors, c_normals, c_textures, offset)
+                arguments = (block['color'], self.vertices, c_colors, c_normals, c_textures)
 
                 add_face((x, y, z), 'top', (1.0, 1.0, 1.0), *arguments)
+                self.blocks[(sx, sy, sz)]['faces'][directions.index('top')] = 1
 
                 tests = [sx > 0, sx < chunk_size - 1, sz > 0, sz < chunk_size - 1]
 
@@ -421,12 +413,17 @@ class Chunk:
 
                         if height_diff > 0:
                             add_face((x, (y + 1) - height_diff, z), faces[i], (1.0, height_diff, 1.0), *arguments)
+                            self.blocks[(sx, sy, sz)]['faces'][directions.index(faces[i])] = 1
                     else:
                         test_height = chunks[values2[i]].heightmap[values3[i]]
                         height_diff = sy - test_height
 
                         if height_diff > 0:
                             add_face((x, (y + 1) - height_diff, z), faces[i], (1.0, height_diff, 1.0), *arguments)
+                            self.blocks[(sx, sy, sz)]['faces'][directions.index(faces[i])] = 1
+
+                self.blocks[(sx, sy, sz)]['offset'] = self.offset
+                self.offset += 4 * sum(self.blocks[(sx, sy, sz)]['faces'])
 
         self.vbo.data(self.vertices, "vertex")
         self.vbo.data(c_colors, "color")
@@ -438,30 +435,86 @@ class Chunk:
 
     def get_color(self, tile):
         self.vbo.color()
+        offset = self.blocks[tile]['offset']
 
         data = to_gl_float([0] * 4)
-        glGetBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[2]) * 384, 16, data)
+        glGetBufferSubData(GL_ARRAY_BUFFER, offset * 16, 16, data)
+
         return list(data)
 
     def set_color(self, tile, color):
         self.vbo.color()
+        offset = self.blocks[tile]['offset']
+        length = (sum(self.blocks[tile]['faces'])) * 4
 
-        data = to_gl_float([*color] * 96)
-        glBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[2]) * 384, 384, data)
+        data = to_gl_float([*color] * length)
+        glBufferSubData(GL_ARRAY_BUFFER, offset * 16, length * 16, data)
 
-    def change_height(self, tile, height_diff):
-        tile_height = tile[1]
-        cube_size = 72 * sizeof(c_float)
+    def add_block(self, tile, color, data):
+        self.heightmap[tile] += 1
 
+        sx, sz = tile
+        sy = self.heightmap[tile]
+
+        x = sx + self.pos[0] * chunk_size
+        y = sy
+        z = sz + self.pos[1] * chunk_size
+
+        self.blocks[(sx, sy, sz)] = {
+            'position': (sx, sy, sz),
+            'world_pos': (x, sy, z),
+            'color': color,
+            'offset': 0,
+            'faces': [0, 0, 0, 0, 0, 0]
+        }
+
+        arguments = (block['color'], *data)
+
+        add_face((x, y, z), 'top', (1.0, 1.0, 1.0), *arguments)
+        self.blocks[(sx, sy, sz)]['faces'][directions.index('top')] = 1
+
+        tests = [sx > 0, sx < chunk_size - 1, sz > 0, sz < chunk_size - 1]
+
+        values = [(sx - 1, sz), (sx + 1, sz), (sx, sz - 1), (sx, sz + 1)]
+        values2 = [(self.cx - 1, self.cz), (self.cx + 1, self.cz), (self.cx, self.cz - 1), (self.cx, self.cz + 1)]
+        values3 = [(chunk_size - 1, sz), (0, sz), (sx, chunk_size - 1), (sx, 0)]
+
+        faces = ['left', 'right', 'back', 'front']
+
+        for i, test in enumerate(tests):
+            if test:
+                test_height = self.heightmap[values[i]]
+                height_diff = sy - test_height
+
+                if height_diff > 0:
+                    add_face((x, (y + 1) - height_diff, z), faces[i], (1.0, height_diff, 1.0), *arguments)
+                    self.blocks[(sx, sy, sz)]['faces'][directions.index(faces[i])] = 1
+            else:
+                test_height = chunks[values2[i]].heightmap[values3[i]]
+                height_diff = sy - test_height
+
+                if height_diff > 0:
+                    add_face((x, (y + 1) - height_diff, z), faces[i], (1.0, height_diff, 1.0), *arguments)
+                    self.blocks[(sx, sy, sz)]['faces'][directions.index(faces[i])] = 1
+
+        self.blocks[(sx, sy, sz)]['offset'] = self.offset
+        self.offset += 4 * sum(self.blocks[(sx, sy, sz)]['faces'])
+
+    def create_block(self, tile):
         self.vbo.vertex()
 
+        '''
         tile_data = to_gl_float([0] * cube_size)
         glGetBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[2]) * cube_size, cube_size, tile_data)
 
         new_data = to_gl_float([c + height_diff if c == tile_height else c for c in tile_data])
         glBufferSubData(GL_ARRAY_BUFFER, (tile[0] * chunk_size + tile[2]) * cube_size, cube_size, new_data)
+        '''
 
-        if self.heightmap[(tile[0], tile[2])] == tile_height:
+        offset = self.blocks[tile]['offset']
+        length = (sum(self.blocks[tile]['faces'])) * 3
+
+        if self.heightmap[(tile[0], tile[2])] == tile[1]:
             self.heightmap[(tile[0], tile[2])] += height_diff
 
         self.blocks[tile]['position'][1] += height_diff
@@ -509,9 +562,8 @@ def add_cube(pos, scale, color, verts, cols, norms, texts):
     texts.extend(texture_coordinates)
 
 
-def add_face(pos, direction, scale, color, verts, cols, norms, texts, offset):
+def add_face(pos, direction, scale, color, verts, cols, norms, texts):
     direction_index = directions.index(direction)
-    offset += direction_index * 4
 
     x, y, z = pos
     w, h, d = scale
@@ -525,17 +577,18 @@ def add_face(pos, direction, scale, color, verts, cols, norms, texts, offset):
         [(1.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, h, 0.0), (1.0, h, 0.0)]          # Back
     ]
 
+    vertices = []
     colors = []
     normals = []
     texture_coordinates = []
 
     for i, (sx, sy, sz) in enumerate(cube_signs[direction_index]):
-        verts[offset + (i * 3):offset + (i * 3) + 3] = [x + (w * sx), y + (h * sy), z + (d * sz)]
-        # vertices.extend([x + (w * sx), y + (h * sy), z + (d * sz)])
+        vertices.extend([x + (w * sx), y + (h * sy), z + (d * sz)])
         colors.extend([*color])
         normals.extend([*cube_normals[direction_index]])
         texture_coordinates.extend([*tex_coords[direction_index][i]])
 
+    verts.extend(vertices)
     cols.extend(colors)
     norms.extend(normals)
     texts.extend(texture_coordinates)
