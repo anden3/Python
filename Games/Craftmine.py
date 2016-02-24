@@ -350,21 +350,6 @@ class Camera(object):
         if 0 <= new_rx <= 90 or 270 <= new_rx <= 360:
             self.rx = new_rx
 
-        '''
-        hit = self.hitscan()
-
-        if hit is not None and hit != self.last_hit:
-            if self.last_hit is not None:
-                color_block(*self.last_hit, self.last_hit_color)
-                self.last_hit = None
-                self.last_hit_color = None
-
-            else:
-                self.last_hit = hit
-                self.last_hit_color = get_block_color(*hit)
-                color_block(*hit, (0.0, 1.0, 0.0, 1.0))
-        '''
-
     def get_world_pos(self):
         modelview = to_gl_float([0] * 16)
         glGetFloatv(GL_MODELVIEW_MATRIX, modelview)
@@ -384,8 +369,6 @@ class Camera(object):
 
     def update(self, dt):
         self.get_world_pos()
-
-        # print(self.current_tile)
 
         try:
             self.key_loop(dt)
