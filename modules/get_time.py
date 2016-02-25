@@ -14,37 +14,57 @@ config = {
 class Time:
     def __init__(self):
         self.timings = {}
-        self.count = 0
-        self.t0 = 0
-        self.begun_last = False
+        self.t0 = {}
+        self.count = {}
 
-    def add(self):
+        self.begun_last = {}
+
+    def add(self, name=0):
         t = perf_counter()
 
-        if self.t0 != 0:
-            self.count += 1
-            self.timings[self.count] = t - self.t0
-            self.t0 = 0
+        if name not in self.timings:
+            self.timings[name] = {}
+            self.t0[name] = 0
+            self.count[name] = 0
+            self.begun_last[name] = False
+
+        if self.t0[name] != 0:
+            self.count[name] += 1
+            self.timings[name][self.count[name]] = t - self.t0[name]
+            self.t0[name] = 0
 
         else:
-            self.t0 = t
+            self.t0[name] = t
 
-    def get(self, get_type="last"):
-        if len(self.timings) > 0:
+    def get(self, get_type="last", name=0):
+        if get_type == "all":
+            for time_name in self.timings:
+                self.get(get_type="average", name=time_name)
+                self.get(get_type="max", name=time_name)
+                self.get(get_type="min", name=time_name)
+                self.get(get_type="sum", name=time_name)
+            return
+
+        if name not in self.timings:
+            raise KeyError("Name not defined")
+
+        if len(self.timings[name]) > 0:
             if get_type != "last":
-                if not self.begun_last:
+                if not self.begun_last[name]:
                     print()
-                    self.begun_last = True
+                    self.begun_last[name] = True
 
                 if get_type == "average" or get_type == "avg":
-                    print_converted(sum(self.timings.values()) / len(self.timings), "Average")
+                    print_converted(sum(self.timings[name].values()) / len(self.timings[name]), str(name) + " Average")
                 elif get_type == "min":
-                    print_converted(min(self.timings.values()), "Min")
+                    print_converted(min(self.timings[name].values()), str(name) + " Min")
                 elif get_type == "max":
-                    print_converted(max(self.timings.values()), "Max")
+                    print_converted(max(self.timings[name].values()), str(name) + " Max")
+                elif get_type == "sum":
+                    print_converted(sum(self.timings[name].values()), str(name) + " Sum")
 
             elif get_type == "last":
-                print_converted(self.timings[self.count], "Loop " + str(self.count))
+                print_converted(self.timings[name][self.count[name]], str(name) + " Loop " + str(self.count[name]))
 
 
 def config_time(**kwargs):
@@ -90,7 +110,13 @@ def print_converted(t, text=None):
 
     if t >= 1000:
         t /= 60
-        unit = "min."
+
+        if t >= 1000:
+            t /= 60
+            unit = "hours."
+        else:
+            unit = "min."
+
     else:
         for u in units:
             if t >= 1:
@@ -100,7 +126,11 @@ def print_converted(t, text=None):
                 t *= 1000
 
     assert unit is not None
-    assert 1 <= t < 1000
+
+    try:
+        assert 1 <= t < 1000
+    except AssertionError:
+        print(t, text)
 
     if text is not None:
         desc = "Time Taken (" + text + "):"
