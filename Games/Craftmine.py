@@ -19,8 +19,9 @@ active_chunks = set()
 
 chunk_size = 16
 height_multiplier = 30
-zoom = 100
 render_distance = 3
+
+zoom = 100
 
 seed = random.uniform(-1000, 1000)
 
@@ -269,7 +270,7 @@ class Camera(object):
     def mouse_click(self, x, y, button, modifiers):
         hit = self.hitscan()
 
-        if hit is not None:
+        if hit is not None and hit[0] is not None and hit[1] is not None:
             if button == 1:
                 chunks[hit[0]].create_block(hit[1])
             elif button == 4:
@@ -311,8 +312,17 @@ class Camera(object):
             checking_pos = numpy.dot([0, 0, offset, 1], numpy.linalg.inv(self.modelview))
             checking_chunk, checking_tile = get_chunk_pos(checking_pos)
 
-            if checking_chunk in active_chunks and checking_tile in chunks[checking_chunk].blocks:
-                return checking_chunk, checking_tile
+            sx, sy, sz = checking_tile
+
+            if checking_chunk in active_chunks:
+                if checking_tile in chunks[checking_chunk].blocks:
+                    return checking_chunk, checking_tile
+                else:
+                    for x in [sx - 1, sx, sx + 1]:
+                        for z in [sz - 1, sz, sz + 1]:
+                            if x != sx and z != sz:
+                                if (x, sy, z) in chunks[checking_chunk].blocks:
+                                    return checking_chunk, (x, sy, z)
 
     def update(self, dt):
         self.get_world_pos()
@@ -421,7 +431,7 @@ class Chunk:
 
         for sx in range(chunk_size):
             for sz in range(chunk_size):
-                self.add_block((sx, sz), data)
+                self.add_block((sx, self.heightmap[(sx, sz)], sz), data)
 
         for i in range(len(data)):
             self.vbo.data(data[i], data_names[i])
@@ -450,7 +460,7 @@ class Chunk:
     def create_block(self, tile):
         data = ([], [], [], [])
 
-        self.add_block((tile[0], tile[2]), data, new=True)
+        self.add_block(tile, data, new=True)
 
         self.vbo.vertex()
         vertex_data = to_gl_float(data[0])
@@ -471,31 +481,26 @@ class Chunk:
         self.vbo.vertex_count += int(len(data[0]))
 
     def add_block(self, tile, data, new=False):
-        sx, sz = tile
-        sy = self.heightmap[tile]
+        sx, sy, sz = tile
 
         x = sx + self.pos[0] * chunk_size
         y = sy
         z = sz + self.pos[1] * chunk_size
 
         if new:
-            color = self.blocks[(sx, self.heightmap[tile], sy)]['color']
-            self.heightmap[tile] += 1
-            sy += 1
-            y += 1
+            self.heightmap[tile] = y
+            sy = y
 
             self.blocks[(sx, sy, sz)] = {
                 'position': (sx, sy, sz),
                 'world_pos': (x, sy, z),
-                'color': color,
+                'color': self.blocks[(sx, sy - 1, sz)]['color'],
                 'offset': 0,
                 'faces': [0, 0, 0, 0, 0, 0],
-                'texture_pos': (0, 0)
+                'texture_pos': self.blocks[(sx, sy - 1, sz)]['texture_pos']
             }
 
-        texture_pos = self.blocks[(tile[0], self.heightmap[tile], tile[1])]['texture_pos']
-
-        arguments = (self.blocks[(sx, sy, sz)]['color'], *data, texture_pos)
+        arguments = (self.blocks[(sx, sy, sz)]['color'], *data, self.blocks[(sx, sy, sz)]['texture_pos'])
 
         add_face((x, y, z), 'top', (1.0, 1.0, 1.0), *arguments)
         self.blocks[(sx, sy, sz)]['faces'][directions.index('top')] = 1
@@ -514,8 +519,9 @@ class Chunk:
                 height_diff = sy - test_height
 
                 if height_diff > 0:
-                    add_face((x, (y + 1) - height_diff, z), faces[i], (1.0, height_diff, 1.0), *arguments)
-                    self.blocks[(sx, sy, sz)]['faces'][directions.index(faces[i])] = 1
+                    for block_height in range(1, height_diff + 1):
+                        add_face((x, (y + 1) - block_height, z), faces[i], (1.0, 1.0, 1.0), *arguments)
+                        self.blocks[(sx, (sy + 1) - block_height, sz)]['faces'][directions.index(faces[i])] = 1
             else:
                 test_height = chunks[values2[i]].heightmap[values3[i]]
                 height_diff = sy - test_height
@@ -526,6 +532,12 @@ class Chunk:
 
         self.blocks[(sx, sy, sz)]['offset'] = self.offset
         self.offset += 4 * sum(self.blocks[(sx, sy, sz)]['faces'])
+
+
+def distance(p1, p2):
+    assert len(p1) == len(p2)
+
+    return math.sqrt(sum([(p2[i] - p1[i]) ** 2 for i in range(len(p1))]))
 
 
 # noinspection PyCallingNonCallable
@@ -540,7 +552,7 @@ def get_chunk_pos(pos):
     return chunk, tile
 
 
-def add_face(pos, direction, scale, color, verts, cols, norms, texts, texture_id=(0, 0)):
+def add_face(pos, direction, scale, color, verts, cols, norms, texts, texture_id):
     direction_index = directions.index(direction)
 
     x, y, z = pos
@@ -554,7 +566,6 @@ def add_face(pos, direction, scale, color, verts, cols, norms, texts, texture_id
     vertices = []
     colors = []
     normals = []
-
     tex_coords = []
 
     for tx, ty, tz in texture_coords[direction_index]:
