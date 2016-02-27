@@ -131,6 +131,13 @@ class VBO:
             glBindBuffer(GL_ARRAY_BUFFER, self.buffers[buffer])
             glBufferData(GL_ARRAY_BUFFER, self.buffer_size, None, GL_DYNAMIC_DRAW)
 
+    def empty(self):
+        for buffer in ["vertex", "color", "normal", "texture_coords"]:
+            self.buffers[buffer] = GLuint(0)
+            glGenBuffers(1, self.buffers[buffer])
+            glBindBuffer(GL_ARRAY_BUFFER, self.buffers[buffer])
+            glBufferData(GL_ARRAY_BUFFER, self.buffer_size, None, GL_DYNAMIC_DRAW)
+
     def data(self, buffer_type, data, offset, increase_vertex=True):
         if buffer_type != "texture":
             glBindBuffer(GL_ARRAY_BUFFER, self.buffers[buffer_type])
@@ -154,18 +161,6 @@ class VBO:
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture.width, texture.height, 0, GL_RGB, GL_UNSIGNED_BYTE,
                          data.get_image_data().get_data("RGB", texture.width * 3))
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-
-    def remove(self, buffer_type, offset, length):
-        if buffer_type == "color":
-            offset *= 16
-            length *= 4
-        else:
-            offset *= 12
-            length *= 3
-
-        empty_data = to_gl_float([0] * length)
-        glBindBuffer(GL_ARRAY_BUFFER, self.buffers[buffer_type])
-        glBufferSubData(GL_ARRAY_BUFFER, offset, length * 4, empty_data)
 
     def vertex(self):
         glBindBuffer(GL_ARRAY_BUFFER, self.buffers["vertex"])
@@ -427,19 +422,18 @@ class Chunk:
 
                 for y in range(height - 2, height + 1):
                     self.blocks[(sx, y, sz)] = {
-                        'texture': texture_name,
-                        'offset': 0,
-                        'faces': 0
+                        'texture': texture_name
                     }
 
     def mesh(self):
-        for gx in [-1, 0, 1]:
-            for gz in [-1, 0, 1]:
-                chunk_pos = (self.cx + gx, self.cz + gz)
+        if not self.is_meshed:
+            for gx in [-1, 0, 1]:
+                for gz in [-1, 0, 1]:
+                    chunk_pos = (self.cx + gx, self.cz + gz)
 
-                if chunk_pos != (self.cx, self.cz) and chunk_pos not in chunks:
-                    chunks[chunk_pos] = Chunk(chunk_pos)
-                    chunks[chunk_pos].generate()
+                    if chunk_pos != (self.cx, self.cz) and chunk_pos not in chunks:
+                        chunks[chunk_pos] = Chunk(chunk_pos)
+                        chunks[chunk_pos].generate()
 
         self.vbo.data("texture", texture, 0)
 
@@ -474,34 +468,46 @@ class Chunk:
                 self.vbo.data(data_names[i], data_list, offset)
 
     def remove_block(self, tile):
-        offset = self.blocks[tile]['offset']
         faces = self.blocks[tile]['faces']
-        # texture_name = self.blocks[tile]['texture']
 
-        del self.blocks[tile]
+        self.blocks.pop(tile)
+        self.vbo = VBO()
+        self.offset = 0
 
-        length = bin(faces).count('1') * 4
+        x, y, z = tile
 
-        attributes = ["vertex", "color", "normal", "texture_coords"]
-
-        for buffer in attributes:
-            self.vbo.remove(buffer, offset, length)
-
-        if tile[1] == self.heightmap[(tile[0], tile[2])]:
-            self.heightmap[(tile[0], tile[2])] -= 1
-
-        '''
-        data = ([], [], [], [])
+        neighbors = [
+            (x - 1, y, z), (x + 1, y, z),
+            (x, y - 1, z), (x, y + 1, z),
+            (x, y, z - 1), (x, y, z + 1)
+        ]
 
         for i, c in enumerate(bin(faces)[2:].zfill(6)[::-1]):
-            if c == '0':
-                pass
+            # if c == '0':
+                neighbor = neighbors[i]
 
-        for i, data_list in enumerate(data):
-            self.vbo.data(attributes[i], data_list, self.offset)
+                if not 0 <= neighbor[0] < chunk_size:
+                    continue
 
-        self.offset += 24 - length
-        '''
+                if not 0 <= neighbor[2] < chunk_size:
+                    continue
+
+                if neighbor[1] > self.heightmap[(neighbor[0], neighbor[2])]:
+                    continue
+
+                if neighbor not in self.blocks:
+                    self.blocks[neighbor] = {
+                        'texture': "grass"
+                    }
+
+                    if (neighbor[0], neighbor[2]) in self.heightmap:
+                        if self.heightmap[(neighbor[0], neighbor[2])] < neighbor[1]:
+                            self.heightmap[(neighbor[0], neighbor[2])] = neighbor[1]
+
+        if self.heightmap[(tile[0], tile[2])] == tile[1]:
+            self.heightmap[(tile[0], tile[2])] -= 1
+
+        self.mesh()
 
     def add_block(self, tile, data, new=False):
         sx, sy, sz = tile
@@ -518,12 +524,12 @@ class Chunk:
                 texture_name = "grass"
 
             self.blocks[(sx, sy, sz)] = {
-                'texture': texture_name,
-                'offset': 0,
-                'faces': 0
+                'texture': texture_name
             }
         else:
             texture_name = self.blocks[tile]['texture']
+
+        self.blocks[(sx, sy, sz)]['faces'] = 0
 
         if sy == self.heightmap[(sx, sz)]:
             add_face((x, sy, z), 'top', texture_name, *data)
