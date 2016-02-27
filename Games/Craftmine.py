@@ -111,83 +111,69 @@ def init():
 
 class VBO:
     def __init__(self):
-        self.vertex_buffer_set = False
-        self.color_buffer_set = False
-        self.normal_buffer_set = False
-        self.texture_buffer_set = False
-
-        self.buffer_vertex = GLuint(0)
-        self.buffer_color = GLuint(0)
-        self.buffer_normal = GLuint(0)
-        self.buffer_texture_coords = GLuint(0)
-        self.buffer_texture = GLuint(0)
-
+        # Width * Depth * Height * Max Vertices per Block * Max Values per Vertex * Bytes per Value
+        self.buffer_size = chunk_size ** 2 * height_multiplier * 24 * 4 * 4
         self.vertex_count = 0
 
-        glGenBuffers(1, self.buffer_vertex)
-        glGenBuffers(1, self.buffer_color)
-        glGenBuffers(1, self.buffer_normal)
-        glGenBuffers(1, self.buffer_texture_coords)
-        glGenTextures(0, byref(self.buffer_texture))
+        self.buffers = {
+            "vertex": None,
+            "color": None,
+            "normal": None,
+            "texture": None,
+            "texture_coords": None
+        }
 
     def data(self, data, buffer_type):
-        if buffer_type == "vertex":
-            self.vertex_buffer_set = True
-            self.vertex_count = int(len(data) / 3)
+        self.buffers[buffer_type] = GLuint(0)
 
-            glBindBuffer(GL_ARRAY_BUFFER, self.buffer_vertex)
+        if buffer_type != "texture":
+            glGenBuffers(1, self.buffers[buffer_type])
+            glBindBuffer(GL_ARRAY_BUFFER, self.buffers[buffer_type])
+            glBufferData(GL_ARRAY_BUFFER, self.buffer_size, None, GL_DYNAMIC_DRAW)
 
-        elif buffer_type == "color":
-            self.color_buffer_set = True
-            glBindBuffer(GL_ARRAY_BUFFER, self.buffer_color)
+            gl_data = to_gl_float(data)
+            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(gl_data), gl_data)
 
-        elif buffer_type == "normal":
-            self.normal_buffer_set = True
-            glBindBuffer(GL_ARRAY_BUFFER, self.buffer_normal)
+            if buffer_type == "vertex":
+                self.vertex_count = int(len(data) / 3)
 
-        elif buffer_type == "texture":
-            self.texture_buffer_set = True
+        else:
+            glGenTextures(1, self.buffers[buffer_type])
             glBindTexture(data.target, data.id)
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture.width, texture.height, 0, GL_RGB, GL_UNSIGNED_BYTE,
                          data.get_image_data().get_data("RGB", texture.width * 3))
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-            return
-
-        elif buffer_type == "texture_coords":
-            glBindBuffer(GL_ARRAY_BUFFER, self.buffer_texture_coords)
-
-        glBufferData(GL_ARRAY_BUFFER, chunk_size ** 2 * height_multiplier * 24 * 4 * 2, to_gl_float(data), GL_DYNAMIC_DRAW)
 
     def vertex(self):
-        glBindBuffer(GL_ARRAY_BUFFER, self.buffer_vertex)
+        glBindBuffer(GL_ARRAY_BUFFER, self.buffers["vertex"])
         glVertexPointer(3, GL_FLOAT, 0, 0)
 
     def color(self):
-        glBindBuffer(GL_ARRAY_BUFFER, self.buffer_color)
+        glBindBuffer(GL_ARRAY_BUFFER, self.buffers["color"])
         glColorPointer(4, GL_FLOAT, 0, 0)
 
     def normal(self):
-        glBindBuffer(GL_ARRAY_BUFFER, self.buffer_normal)
+        glBindBuffer(GL_ARRAY_BUFFER, self.buffers["normal"])
         glNormalPointer(GL_FLOAT, 0, 0)
 
     def texture(self):
-        glBindBuffer(GL_ARRAY_BUFFER, self.buffer_texture_coords)
+        glBindBuffer(GL_ARRAY_BUFFER, self.buffers["texture_coords"])
         glTexCoordPointer(3, GL_FLOAT, 0, 0)
 
     def draw(self):
-        if self.vertex_buffer_set:
+        if self.buffers["vertex"] is not None:
             glEnableClientState(GL_VERTEX_ARRAY)
             self.vertex()
 
-        if self.color_buffer_set:
+        if self.buffers["color"] is not None:
             glEnableClientState(GL_COLOR_ARRAY)
             self.color()
 
-        if self.normal_buffer_set:
+        if self.buffers["normal"] is not None:
             glEnableClientState(GL_NORMAL_ARRAY)
             self.normal()
 
-        if self.texture_buffer_set:
+        if self.buffers["texture_coords"] is not None:
             glEnableClientState(GL_TEXTURE_COORD_ARRAY)
             glEnable(GL_TEXTURE_2D)
             glBindTexture(texture.target, texture.id)
@@ -282,8 +268,6 @@ class Camera(object):
 
     def mouse_click(self, x, y, button, modifiers):
         hit = self.hitscan()
-
-        print(hit)
 
         if hit is not None and hit[0] is not None and hit[1] is not None:
             if button == 1:
@@ -458,10 +442,10 @@ class Chunk:
     def set_color(self, tile, color):
         self.vbo.color()
         offset = self.blocks[tile]['offset']
-        length = self.blocks[tile]['faces'] * 4
+        length = self.blocks[tile]['faces']
 
         data = to_gl_float([*color] * length)
-        glBufferSubData(GL_ARRAY_BUFFER, offset * 16, length * 16, data)
+        glBufferSubData(GL_ARRAY_BUFFER, offset * 16, length * 64, data)
 
     def create_block(self, tile):
         data = ([], [], [], [])
@@ -470,21 +454,21 @@ class Chunk:
 
         self.vbo.vertex()
         vertex_data = to_gl_float(data[0])
-        glBufferSubData(GL_ARRAY_BUFFER, self.offset * 12, len(data[0]) * 4, vertex_data)
+        glBufferSubData(GL_ARRAY_BUFFER, self.offset * 12, sizeof(vertex_data), vertex_data)
 
         self.vbo.color()
         color_data = to_gl_float(data[1])
-        glBufferSubData(GL_ARRAY_BUFFER, self.offset * 16, len(data[1]) * 4, color_data)
+        glBufferSubData(GL_ARRAY_BUFFER, self.offset * 16, sizeof(color_data), color_data)
 
         self.vbo.normal()
         normal_data = to_gl_float(data[2])
-        glBufferSubData(GL_ARRAY_BUFFER, self.offset * 12, len(data[2]) * 4, normal_data)
+        glBufferSubData(GL_ARRAY_BUFFER, self.offset * 12, sizeof(normal_data), normal_data)
 
         self.vbo.texture()
         texture_coord_data = to_gl_float(data[3])
-        glBufferSubData(GL_ARRAY_BUFFER, self.offset * 12, len(data[3]) * 4, texture_coord_data)
+        glBufferSubData(GL_ARRAY_BUFFER, self.offset * 12, sizeof(texture_coord_data), texture_coord_data)
 
-        self.vbo.vertex_count += int(len(data[0]))
+        self.vbo.vertex_count += int(len(data[0]) / 3)
 
     def add_block(self, tile, data, new=False):
         sx, sy, sz = tile
