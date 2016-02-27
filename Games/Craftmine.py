@@ -28,10 +28,17 @@ seed = random.uniform(-1000, 1000)
 directions = ["left", "right", "bottom", "top", "front", "back"]
 
 texture_pos = {
-    (0.8, 0.8, 0.8, 1.0): (0, 0),
-    (0.0, 0.5, 0.0, 1.0): (1, 0),
-    (0.76, 0.7, 0.5, 1.0): (0, 1),
-    (0.0, 0.0, 0.5, 1.0): (1, 1)
+    "snow": (0, 0),
+    "grass": (1, 0),
+    "sand": (0, 1),
+    "blue wool": (1, 1)
+}
+
+texture_color = {
+    "snow": (0.8, 0.8, 0.8, 1.0),
+    "grass": (0.0, 0.5, 0.0, 1.0),
+    "sand": (0.76, 0.7, 0.5, 1.0),
+    "blue wool": (0.0, 0.0, 0.5, 1.0)
 }
 
 cube_signs = [
@@ -276,6 +283,8 @@ class Camera(object):
     def mouse_click(self, x, y, button, modifiers):
         hit = self.hitscan()
 
+        print(hit)
+
         if hit is not None and hit[0] is not None and hit[1] is not None:
             if button == 1:
                 chunks[hit[0]].create_block(hit[1])
@@ -394,23 +403,23 @@ class Chunk:
 
                 self.heightmap[(sx, sz)] = height
 
-                cube_color = (1.0, 1.0, 1.0, 1.0)
+                texture_name = None
 
                 if -1.0 <= noise_height < -0.33:
-                    cube_color = (0.0, 0.0, 0.5, 1.0)
+                    texture_name = "blue wool"
 
                 elif -0.33 <= noise_height < -0.11:
-                    cube_color = (0.76, 0.70, 0.50, 1.0)
+                    texture_name = "sand"
 
                 elif -0.11 <= noise_height < 0.66:
-                    cube_color = (0.0, 0.5, 0.0, 1.0)
+                    texture_name = "grass"
 
                 elif 0.66 <= noise_height <= 1.0:
-                    cube_color = (0.8, 0.8, 0.8, 1.0)
+                    texture_name = "snow"
 
                 for y in range(height - 2, height + 1):
                     self.blocks[(sx, y, sz)] = {
-                        'color': cube_color,
+                        'texture': texture_name,
                         'offset': 0,
                         'faces': 0
                     }
@@ -484,18 +493,19 @@ class Chunk:
         z = sz + self.cz * chunk_size
 
         if new:
+            sy += 1
             self.heightmap[(sx, sz)] = sy
-            color = self.blocks[(sx, sy - 1, sz)]['color']
+            texture_name = self.blocks[(sx, sy - 1, sz)]['texture']
 
             self.blocks[(sx, sy, sz)] = {
-                'color': color,
+                'texture': texture_name,
                 'offset': 0,
                 'faces': 0
             }
         else:
-            color = self.blocks[tile]['color']
+            texture_name = self.blocks[tile]['texture']
 
-        arguments = (color, *data, texture_pos[color])
+        arguments = (texture_name, *data)
 
         if sy == self.heightmap[(sx, sz)]:
             add_face((x, sy, z), 'top', *arguments)
@@ -557,15 +567,16 @@ def get_chunk_pos(pos):
     return chunk, tile
 
 
-def add_face(pos, direction, color, verts, cols, norms, texts, texture_id, scale=(1.0, 1.0, 1.0)):
+def add_face(pos, direction, texture_name, verts, cols, norms, texts, scale=(1.0, 1.0, 1.0)):
     direction_index = directions.index(direction)
 
     x, y, z = pos
     w, h, d = scale
+    texture_position = texture_pos[texture_name]
 
     texture_positions = [
-        [(texture_id[0] * 16) / texture.width, (texture_id[1] * 16) / texture.height],
-        [((texture_id[0] + 1) * 16) / texture.width, ((texture_id[1] + 1) * 16) / texture.height]
+        [(texture_position[0] * 16) / texture.width, (texture_position[1] * 16) / texture.height],
+        [((texture_position[0] + 1) * 16) / texture.width, ((texture_position[1] + 1) * 16) / texture.height]
     ]
 
     vertices = []
@@ -580,7 +591,7 @@ def add_face(pos, direction, color, verts, cols, norms, texts, texture_id, scale
 
     for i, (sx, sy, sz) in enumerate(cube_signs[direction_index]):
         vertices.extend([x + (w * sx), y + (h * sy), z + (d * sz)])
-        colors.extend([*color])
+        colors.extend([*texture_color[texture_name]])
         normals.extend([*cube_normals[direction_index]])
 
     verts.extend(vertices)
