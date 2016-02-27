@@ -18,7 +18,7 @@ chunks = {}
 active_chunks = set()
 
 chunk_size = 16
-height_multiplier = 30
+height_multiplier = 64
 render_distance = 3
 
 zoom = 100
@@ -111,8 +111,7 @@ def init():
 
 class VBO:
     def __init__(self):
-        # Width * Depth * Height * Max Vertices per Block * Max Values per Vertex * Bytes per Value
-        self.buffer_size = chunk_size ** 2 * height_multiplier * 24 * 4 * 4
+        self.buffer_size = chunk_size ** 2 * height_multiplier * 24 * 2
         self.vertex_count = 0
 
         self.buffers = {
@@ -123,26 +122,50 @@ class VBO:
             "texture_coords": None
         }
 
-    def data(self, data, buffer_type):
-        self.buffers[buffer_type] = GLuint(0)
+        self.generate()
 
-        if buffer_type != "texture":
-            glGenBuffers(1, self.buffers[buffer_type])
-            glBindBuffer(GL_ARRAY_BUFFER, self.buffers[buffer_type])
+    def generate(self):
+        for buffer in ["vertex", "color", "normal", "texture_coords"]:
+            self.buffers[buffer] = GLuint(0)
+            glGenBuffers(1, self.buffers[buffer])
+            glBindBuffer(GL_ARRAY_BUFFER, self.buffers[buffer])
             glBufferData(GL_ARRAY_BUFFER, self.buffer_size, None, GL_DYNAMIC_DRAW)
 
-            gl_data = to_gl_float(data)
-            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(gl_data), gl_data)
+    def data(self, buffer_type, data, offset, increase_vertex=True):
+        if buffer_type != "texture":
+            glBindBuffer(GL_ARRAY_BUFFER, self.buffers[buffer_type])
 
-            if buffer_type == "vertex":
-                self.vertex_count = int(len(data) / 3)
+            if buffer_type == "color":
+                offset *= 16
+            else:
+                offset *= 12
+
+            gl_data = to_gl_float(data)
+            glBufferSubData(GL_ARRAY_BUFFER, offset, sizeof(gl_data), gl_data)
+
+            if buffer_type == "vertex" and increase_vertex:
+                self.vertex_count += int(len(data) / 3)
 
         else:
+            self.buffers[buffer_type] = GLuint(0)
             glGenTextures(1, self.buffers[buffer_type])
             glBindTexture(data.target, data.id)
+
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture.width, texture.height, 0, GL_RGB, GL_UNSIGNED_BYTE,
                          data.get_image_data().get_data("RGB", texture.width * 3))
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+
+    def remove(self, buffer_type, offset, length):
+        if buffer_type == "color":
+            offset *= 16
+            length *= 4
+        else:
+            offset *= 12
+            length *= 3
+
+        empty_data = to_gl_float([0] * length)
+        glBindBuffer(GL_ARRAY_BUFFER, self.buffers[buffer_type])
+        glBufferSubData(GL_ARRAY_BUFFER, offset, length * 4, empty_data)
 
     def vertex(self):
         glBindBuffer(GL_ARRAY_BUFFER, self.buffers["vertex"])
@@ -184,7 +207,7 @@ class VBO:
 
 # noinspection PyUnusedLocal
 class Camera(object):
-    x, y, z = 0, height_multiplier * 2, 0
+    x, y, z = 0, height_multiplier, 0
     rx, ry = 340, 0
     w, h = 1920, 1080
     far = 8192
@@ -271,9 +294,10 @@ class Camera(object):
 
         if hit is not None and hit[0] is not None and hit[1] is not None:
             if button == 1:
-                chunks[hit[0]].create_block(hit[1])
+                chunks[hit[0]].remove_block(hit[1])
             elif button == 4:
-                chunks[hit[0]].set_color(hit[1], (1.0, 1.0, 1.0, 1.0))
+                chunks[hit[0]].create_block((hit[1][0], hit[1][1] + 1, hit[1][2]), new=True)
+                # chunks[hit[0]].set_color(hit[1], (1.0, 1.0, 1.0, 1.0))
 
     def mouse_drag(self, x, y, dx, dy, buttons, modifers):
         self.mouse_move(x, y, dx, dy)
@@ -383,7 +407,7 @@ class Chunk:
                 z = sz + self.cz * chunk_size
 
                 noise_height = noise.snoise3(x / zoom, z / zoom, seed, octaves=3)
-                height = round((noise_height + 1) * height_multiplier)
+                height = round((noise_height + 1) / 2 * height_multiplier)
 
                 self.heightmap[(sx, sz)] = height
 
@@ -409,9 +433,6 @@ class Chunk:
                     }
 
     def mesh(self):
-        data = ([], [], [], [])
-        data_names = ["vertex", "color", "normal", "texture_coords"]
-
         for gx in [-1, 0, 1]:
             for gz in [-1, 0, 1]:
                 chunk_pos = (self.cx + gx, self.cz + gz)
@@ -420,13 +441,10 @@ class Chunk:
                     chunks[chunk_pos] = Chunk(chunk_pos)
                     chunks[chunk_pos].generate()
 
+        self.vbo.data("texture", texture, 0)
+
         for pos in self.blocks.copy():
-            self.add_block(pos, data)
-
-        for i in range(len(data)):
-            self.vbo.data(data[i], data_names[i])
-
-        self.vbo.data(texture, "texture")
+            self.create_block(pos)
 
         self.is_meshed = True
 
@@ -440,40 +458,50 @@ class Chunk:
         return list(data)
 
     def set_color(self, tile, color):
-        self.vbo.color()
         offset = self.blocks[tile]['offset']
-        length = self.blocks[tile]['faces']
+        length = bin(self.blocks[tile]['faces']).count('1')
 
-        data = to_gl_float([*color] * length)
-        glBufferSubData(GL_ARRAY_BUFFER, offset * 16, length * 64, data)
+        self.vbo.data("color", [*color] * length, offset)
 
-    def create_block(self, tile):
+    def create_block(self, tile, new=False):
+        data = ([], [], [], [])
+        data_names = ["vertex", "color", "normal", "texture_coords"]
+
+        if self.add_block(tile, data, new=new):
+            offset = self.blocks[tile]['offset']
+
+            for i, data_list in enumerate(data):
+                self.vbo.data(data_names[i], data_list, offset)
+
+    def remove_block(self, tile):
+        offset = self.blocks[tile]['offset']
+        faces = self.blocks[tile]['faces']
+        # texture_name = self.blocks[tile]['texture']
+
+        del self.blocks[tile]
+
+        length = bin(faces).count('1') * 4
+
+        attributes = ["vertex", "color", "normal", "texture_coords"]
+
+        for buffer in attributes:
+            self.vbo.remove(buffer, offset, length)
+
+        if tile[1] == self.heightmap[(tile[0], tile[2])]:
+            self.heightmap[(tile[0], tile[2])] -= 1
+
+        '''
         data = ([], [], [], [])
 
-        if (tile[0], tile[1] + 1, tile[2]) in self.blocks:
-            return
+        for i, c in enumerate(bin(faces)[2:].zfill(6)[::-1]):
+            if c == '0':
+                pass
 
-        self.add_block(tile, data, new=True)
+        for i, data_list in enumerate(data):
+            self.vbo.data(attributes[i], data_list, self.offset)
 
-        offset = self.blocks[(tile[0], tile[1] + 1, tile[2])]['offset']
-
-        self.vbo.vertex()
-        vertex_data = to_gl_float(data[0])
-        glBufferSubData(GL_ARRAY_BUFFER, offset * 12, sizeof(vertex_data), vertex_data)
-
-        self.vbo.color()
-        color_data = to_gl_float(data[1])
-        glBufferSubData(GL_ARRAY_BUFFER, offset * 16, sizeof(color_data), color_data)
-
-        self.vbo.normal()
-        normal_data = to_gl_float(data[2])
-        glBufferSubData(GL_ARRAY_BUFFER, offset * 12, sizeof(normal_data), normal_data)
-
-        self.vbo.texture()
-        texture_coord_data = to_gl_float(data[3])
-        glBufferSubData(GL_ARRAY_BUFFER, offset * 12, sizeof(texture_coord_data), texture_coord_data)
-
-        self.vbo.vertex_count += int(len(data[0]) / 3)
+        self.offset += 24 - length
+        '''
 
     def add_block(self, tile, data, new=False):
         sx, sy, sz = tile
@@ -482,9 +510,12 @@ class Chunk:
         z = sz + self.cz * chunk_size
 
         if new:
-            sy += 1
             self.heightmap[(sx, sz)] = sy
-            texture_name = self.blocks[(sx, sy - 1, sz)]['texture']
+
+            if (sx, sy - 1, sz) in self.blocks:
+                texture_name = self.blocks[(sx, sy - 1, sz)]['texture']
+            else:
+                texture_name = "grass"
 
             self.blocks[(sx, sy, sz)] = {
                 'texture': texture_name,
@@ -494,11 +525,9 @@ class Chunk:
         else:
             texture_name = self.blocks[tile]['texture']
 
-        arguments = (texture_name, *data)
-
         if sy == self.heightmap[(sx, sz)]:
-            add_face((x, sy, z), 'top', *arguments)
-            self.blocks[(sx, sy, sz)]['faces'] += 1
+            add_face((x, sy, z), 'top', texture_name, *data)
+            self.blocks[(sx, sy, sz)]['faces'] += 2 ** 3
 
         tests = [
             sx > 0, sx < chunk_size - 1,
@@ -527,14 +556,16 @@ class Chunk:
                 height_diff = sy - chunks[values2[i]].heightmap[values3[i]]
 
             if height_diff > 0:
-                add_face((x, sy, z), faces[i], *arguments)
-                self.blocks[(sx, sy, sz)]['faces'] += 1
+                add_face((x, sy, z), faces[i], texture_name, *data)
+                self.blocks[(sx, sy, sz)]['faces'] += 2 ** directions.index(faces[i])
 
         if self.blocks[(sx, sy, sz)]['faces'] == 0:
             del self.blocks[(sx, sy, sz)]
+            return False
         else:
             self.blocks[(sx, sy, sz)]['offset'] = self.offset
-            self.offset += self.blocks[(sx, sy, sz)]['faces'] * 4
+            self.offset += bin(self.blocks[(sx, sy, sz)]['faces']).count('1') * 4
+            return True
 
 
 def distance(p1, p2):
