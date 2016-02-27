@@ -450,23 +450,28 @@ class Chunk:
     def create_block(self, tile):
         data = ([], [], [], [])
 
+        if (tile[0], tile[1] + 1, tile[2]) in self.blocks:
+            return
+
         self.add_block(tile, data, new=True)
+
+        offset = self.blocks[(tile[0], tile[1] + 1, tile[2])]['offset']
 
         self.vbo.vertex()
         vertex_data = to_gl_float(data[0])
-        glBufferSubData(GL_ARRAY_BUFFER, self.offset * 12, sizeof(vertex_data), vertex_data)
+        glBufferSubData(GL_ARRAY_BUFFER, offset * 12, sizeof(vertex_data), vertex_data)
 
         self.vbo.color()
         color_data = to_gl_float(data[1])
-        glBufferSubData(GL_ARRAY_BUFFER, self.offset * 16, sizeof(color_data), color_data)
+        glBufferSubData(GL_ARRAY_BUFFER, offset * 16, sizeof(color_data), color_data)
 
         self.vbo.normal()
         normal_data = to_gl_float(data[2])
-        glBufferSubData(GL_ARRAY_BUFFER, self.offset * 12, sizeof(normal_data), normal_data)
+        glBufferSubData(GL_ARRAY_BUFFER, offset * 12, sizeof(normal_data), normal_data)
 
         self.vbo.texture()
         texture_coord_data = to_gl_float(data[3])
-        glBufferSubData(GL_ARRAY_BUFFER, self.offset * 12, sizeof(texture_coord_data), texture_coord_data)
+        glBufferSubData(GL_ARRAY_BUFFER, offset * 12, sizeof(texture_coord_data), texture_coord_data)
 
         self.vbo.vertex_count += int(len(data[0]) / 3)
 
@@ -522,9 +527,8 @@ class Chunk:
                 height_diff = sy - chunks[values2[i]].heightmap[values3[i]]
 
             if height_diff > 0:
-                for block_height in range(1, height_diff + 1):
-                    add_face((x, (sy + 1) - block_height, z), faces[i], *arguments)
-                    self.blocks[(sx, (sy + 1) - block_height, sz)]['faces'] += 1
+                add_face((x, sy, z), faces[i], *arguments)
+                self.blocks[(sx, sy, sz)]['faces'] += 1
 
         if self.blocks[(sx, sy, sz)]['faces'] == 0:
             del self.blocks[(sx, sy, sz)]
