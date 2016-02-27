@@ -82,12 +82,6 @@ def init():
     glDepthFunc(GL_LEQUAL)
     glShadeModel(GL_SMOOTH)
     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST)
-    glEnable(GL_CULL_FACE)
-
-    global window, keys, texture
-    window = CameraWindow()
-    keys = key.KeyStateHandler()
-    window.push_handlers(keys)
 
     images = [
         pyglet.image.load("images/snow.png").get_image_data(),
@@ -101,17 +95,27 @@ def init():
     for image in images:
         texture_atlas.add(image)
 
+    global texture
     texture = texture_atlas.texture
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
 
+    global window, keys
+    window = CameraWindow()
+    keys = key.KeyStateHandler()
+    window.push_handlers(keys)
+
     pyglet.app.run()
 
 
 class VBO:
-    def __init__(self):
-        self.buffer_size = chunk_size ** 2 * height_multiplier * 24 * 2
+    def __init__(self, size=None):
+        if size is None:
+            self.buffer_size = chunk_size ** 2 * height_multiplier * 24 * 2
+        else:
+            self.buffer_size = size
+
         self.vertex_count = 0
 
         self.buffers = {
@@ -131,14 +135,7 @@ class VBO:
             glBindBuffer(GL_ARRAY_BUFFER, self.buffers[buffer])
             glBufferData(GL_ARRAY_BUFFER, self.buffer_size, None, GL_DYNAMIC_DRAW)
 
-    def empty(self):
-        for buffer in ["vertex", "color", "normal", "texture_coords"]:
-            self.buffers[buffer] = GLuint(0)
-            glGenBuffers(1, self.buffers[buffer])
-            glBindBuffer(GL_ARRAY_BUFFER, self.buffers[buffer])
-            glBufferData(GL_ARRAY_BUFFER, self.buffer_size, None, GL_DYNAMIC_DRAW)
-
-    def data(self, buffer_type, data, offset, increase_vertex=True):
+    def data(self, buffer_type, data, offset):
         if buffer_type != "texture":
             glBindBuffer(GL_ARRAY_BUFFER, self.buffers[buffer_type])
 
@@ -150,7 +147,7 @@ class VBO:
             gl_data = to_gl_float(data)
             glBufferSubData(GL_ARRAY_BUFFER, offset, sizeof(gl_data), gl_data)
 
-            if buffer_type == "vertex" and increase_vertex:
+            if buffer_type == "vertex":
                 self.vertex_count += int(len(data) / 3)
 
         else:
@@ -226,6 +223,8 @@ class Camera(object):
 
     flying = False
 
+    ui = VBO(size=1000)
+
     def view(self, width, height):
         self.w, self.h = width, height
         glViewport(0, 0, width, height)
@@ -236,6 +235,31 @@ class Camera(object):
         glLoadIdentity()
         gluPerspective(self.fov, self.w / self.h, 0.1, self.far)
         glMatrixMode(GL_MODELVIEW)
+
+    def ui_mode(self):
+        glDisable(GL_DEPTH_TEST)
+        glDisable(GL_CULL_FACE)
+        glDisable(GL_TEXTURE_2D)
+        glDisable(GL_LIGHTING)
+        
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        gluOrtho2D(-self.w / 2, self.w / 2, -self.h / 2, self.h / 2)
+        
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+
+    def init_ui(self):
+        vertices, colors, tex_coords = [], [], []
+
+        add_rect(704, 449, 32, 2, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords)
+        add_rect(719, 434, 2, 32, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords)
+        add_rect(704, 200, 32, 32, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords, image="blue wool")
+
+        self.ui.data("texture", texture, 0)
+        self.ui.data("vertex", to_gl_float(vertices), 0)
+        self.ui.data("color", to_gl_float(colors), 0)
+        self.ui.data("texture_coords", to_gl_float(tex_coords), 0)
 
     def key_loop(self, dt):
         if keys[key.LSHIFT]:
@@ -625,6 +649,31 @@ def add_face(pos, direction, texture_name, verts, cols, norms, texts, scale=(1.0
     texts.extend(tex_coords)
 
 
+def add_rect(x, y, w, h, color, verts, cols, texts, image=None):
+    x -= 720
+    y -= 450
+
+    verts.extend([x + w, y + h, 0, x + w, y, 0, x, y, 0, x, y + h, 0])
+    cols.extend([*color] * 4)
+
+    if image:
+        texture_position = texture_pos[image]
+
+        texture_positions = [
+            [(texture_position[0] * 16) / texture.width, (texture_position[1] * 16) / texture.height],
+            [((texture_position[0] + 1) * 16) / texture.width, ((texture_position[1] + 1) * 16) / texture.height]
+        ]
+
+        texts.extend([
+            texture_positions[0][0], texture_positions[0][1], 0,
+            texture_positions[1][0], texture_positions[0][1], 0,
+            texture_positions[1][0], texture_positions[1][1], 0,
+            texture_positions[0][0], texture_positions[1][1], 0,
+        ])
+    else:
+        texts.extend([0] * 12)
+
+
 def render_light(pos, direction, angle, attenuation=0):
     glLightfv(GL_LIGHT0, GL_AMBIENT, to_gl_float((0.2, 0.2, 0.2, 1.0)))
     glLightfv(GL_LIGHT0, GL_DIFFUSE, to_gl_float((1.0, 1.0, 1.0, 1.0)))
@@ -672,6 +721,7 @@ class CameraWindow(pyglet.window.Window):
         self.on_mouse_motion = self.cam.mouse_move
 
         self.cam.update(0.0)
+        self.cam.init_ui()
 
         pyglet.clock.schedule_interval(self.cam.update, 1 / 60)
 
@@ -683,6 +733,7 @@ class CameraWindow(pyglet.window.Window):
 
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_LIGHTING)
+        glEnable(GL_CULL_FACE)
 
         render_light((0, 100, 0), (0.4, -0.824, 0.4), 45)
 
@@ -693,5 +744,12 @@ class CameraWindow(pyglet.window.Window):
 
         for chunk in active_chunks:
             chunks[chunk].vbo.draw()
+
+        self.cam.ui_mode()
+
+        self.cam.ui.draw()
+
+        self.cam.perspective()
+        self.cam.apply()
 
 init()
