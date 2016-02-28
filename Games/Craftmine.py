@@ -315,8 +315,7 @@ class Camera(object):
             if button == 1:
                 chunks[hit[0]].remove_block(hit[1])
             elif button == 4:
-                chunks[hit[0]].create_block((hit[1][0], hit[1][1] + 1, hit[1][2]), new=True)
-                # chunks[hit[0]].set_color(hit[1], (1.0, 1.0, 1.0, 1.0))
+                chunks[hit[2][0]].create_block(hit[2][1], new=True)
 
     def mouse_drag(self, x, y, dx, dy, buttons, modifers):
         self.mouse_move(x, y, dx, dy)
@@ -350,7 +349,9 @@ class Camera(object):
         self.current_chunk, self.current_tile = get_chunk_pos(self.world_pos)
 
     def hitscan(self):
-        for offset in range(-1, -self.range, -1):
+        last_pos = None
+
+        for offset in numpy.arange(-1, -self.range, -0.1):
             checking_pos = numpy.dot([0, 0, offset, 1], numpy.linalg.inv(self.modelview))
             checking_chunk, checking_tile = get_chunk_pos(checking_pos)
 
@@ -358,13 +359,12 @@ class Camera(object):
 
             if checking_chunk in active_chunks:
                 if checking_tile in chunks[checking_chunk].blocks:
-                    return checking_chunk, checking_tile
-                else:
-                    for x in [sx - 1, sx, sx + 1]:
-                        for z in [sz - 1, sz, sz + 1]:
-                            if x != sx and z != sz:
-                                if (x, sy, z) in chunks[checking_chunk].blocks:
-                                    return checking_chunk, (x, sy, z)
+                    if last_pos is not None:
+                        return checking_chunk, checking_tile, get_chunk_pos(last_pos)
+                    else:
+                        return checking_chunk, checking_tile
+
+            last_pos = checking_pos
 
     def update(self, dt):
         self.get_world_pos()
@@ -417,6 +417,8 @@ class Chunk:
 
         self.offset = 0
 
+        self.block_map = numpy.zeros((chunk_size, height_multiplier, chunk_size), dtype=numpy.uint8)
+
         self.is_meshed = False
 
     def generate(self):
@@ -448,6 +450,9 @@ class Chunk:
                     self.blocks[(sx, y, sz)] = {
                         'texture': texture_name
                     }
+
+                for y in range(0, height + 1):
+                    self.block_map[sx][y][sz] = 1
 
     def mesh(self):
         if not self.is_meshed:
@@ -491,47 +496,69 @@ class Chunk:
             for i, data_list in enumerate(data):
                 self.vbo.data(data_names[i], data_list, offset)
 
-    def remove_block(self, tile):
-        faces = self.blocks[tile]['faces']
-
-        self.blocks.pop(tile)
-        self.vbo = VBO()
-        self.offset = 0
-
+    def get_neighbors(self, tile, get_faces=False):
         x, y, z = tile
 
         neighbors = [
             (x - 1, y, z), (x + 1, y, z),
             (x, y - 1, z), (x, y + 1, z),
-            (x, y, z - 1), (x, y, z + 1)
+            (x, y, z + 1), (x, y, z - 1)
         ]
 
-        for i, c in enumerate(bin(faces)[2:].zfill(6)[::-1]):
-            # if c == '0':
-                neighbor = neighbors[i]
+        tile_neighbors = []
 
-                if not 0 <= neighbor[0] < chunk_size:
-                    continue
+        for neighbor in neighbors:
+            sx, sy, sz = neighbor
+            cx, cz = self.cx, self.cz
 
-                if not 0 <= neighbor[2] < chunk_size:
-                    continue
+            if sx < 0:
+                sx += 16
+                cx -= 1
+            elif sx > 15:
+                sx -= 16
+                cx += 1
 
-                if neighbor[1] > self.heightmap[(neighbor[0], neighbor[2])]:
-                    continue
+            if sz < 0:
+                sz += 16
+                cz -= 1
+            elif sz > 15:
+                sz -= 16
+                cz += 1
 
-                if neighbor not in self.blocks:
-                    self.blocks[neighbor] = {
-                        'texture': "grass"
-                    }
+            if get_faces:
+                tile_neighbors.append(chunks[(cx, cz)].block_map[sx][sy][sz])
+            else:
+                if chunks[(cx, cz)].block_map[sx][sy][sz] == 1:
+                    tile_neighbors.append(((cx, cz), neighbor))
 
-                    if (neighbor[0], neighbor[2]) in self.heightmap:
-                        if self.heightmap[(neighbor[0], neighbor[2])] < neighbor[1]:
-                            self.heightmap[(neighbor[0], neighbor[2])] = neighbor[1]
+        return tile_neighbors
 
-        if self.heightmap[(tile[0], tile[2])] == tile[1]:
-            self.heightmap[(tile[0], tile[2])] -= 1
+    def remove_block(self, tile):
+        self.blocks.pop(tile)
+        self.block_map[tile[0]][tile[1]][tile[2]] = 0
+
+        if tile[1] == self.heightmap[(tile[0]), tile[2]]:
+            self.heightmap[(tile[0]), tile[2]] -= 1
+
+        self.vbo = VBO()
+        self.offset = 0
+
+        chunk_list = []
+
+        for chunk, neighbor in self.get_neighbors(tile):
+            if chunk != (self.cx, self.cz):
+                chunk_list.append(chunk)
+
+            if neighbor not in chunks[chunk].blocks:
+                chunks[chunk].blocks[neighbor] = {
+                    'texture': "grass"
+                }
 
         self.mesh()
+
+        if len(chunk_list) > 0:
+            for chunk in chunk_list:
+                chunks[chunk].mesh()
 
     def add_block(self, tile, data, new=False):
         sx, sy, sz = tile
@@ -540,8 +567,6 @@ class Chunk:
         z = sz + self.cz * chunk_size
 
         if new:
-            self.heightmap[(sx, sz)] = sy
-
             if (sx, sy - 1, sz) in self.blocks:
                 texture_name = self.blocks[(sx, sy - 1, sz)]['texture']
             else:
@@ -553,49 +578,19 @@ class Chunk:
         else:
             texture_name = self.blocks[tile]['texture']
 
-        self.blocks[(sx, sy, sz)]['faces'] = 0
+        neighbors = self.get_neighbors((sx, sy, sz), get_faces=True)
 
-        if sy == self.heightmap[(sx, sz)]:
-            add_face((x, sy, z), 'top', texture_name, *data)
-            self.blocks[(sx, sy, sz)]['faces'] += 2 ** 3
-
-        tests = [
-            sx > 0, sx < chunk_size - 1,
-            sz > 0, sz < chunk_size - 1
-        ]
-
-        values = [
-            (sx - 1, sz), (sx + 1, sz),
-            (sx, sz - 1), (sx, sz + 1)
-        ]
-        values2 = [
-            (self.cx - 1, self.cz), (self.cx + 1, self.cz),
-            (self.cx, self.cz - 1), (self.cx, self.cz + 1)
-        ]
-        values3 = [
-            (chunk_size - 1, sz), (0, sz),
-            (sx, chunk_size - 1), (sx, 0)
-        ]
-
-        faces = ['left', 'right', 'back', 'front']
-
-        for i, test in enumerate(tests):
-            if test:
-                height_diff = sy - self.heightmap[values[i]]
-            else:
-                height_diff = sy - chunks[values2[i]].heightmap[values3[i]]
-
-            if height_diff > 0:
-                add_face((x, sy, z), faces[i], texture_name, *data)
-                self.blocks[(sx, sy, sz)]['faces'] += 2 ** directions.index(faces[i])
-
-        if self.blocks[(sx, sy, sz)]['faces'] == 0:
+        if sum(neighbors) == 6:
             del self.blocks[(sx, sy, sz)]
             return False
-        else:
-            self.blocks[(sx, sy, sz)]['offset'] = self.offset
-            self.offset += bin(self.blocks[(sx, sy, sz)]['faces']).count('1') * 4
-            return True
+
+        for i, face in enumerate(neighbors):
+            if face == 0:
+                add_face((x, sy, z), i, texture_name, *data)
+
+        self.blocks[(sx, sy, sz)]['offset'] = self.offset
+        self.offset += (6 - sum(neighbors)) * 4
+        return True
 
 
 def distance(p1, p2):
@@ -616,9 +611,7 @@ def get_chunk_pos(pos):
     return chunk, tile
 
 
-def add_face(pos, direction, texture_name, verts, cols, norms, texts, scale=(1.0, 1.0, 1.0)):
-    direction_index = directions.index(direction)
-
+def add_face(pos, face, texture_name, verts, cols, norms, texts, scale=(1.0, 1.0, 1.0)):
     x, y, z = pos
     w, h, d = scale
     texture_position = texture_pos[texture_name]
@@ -633,15 +626,15 @@ def add_face(pos, direction, texture_name, verts, cols, norms, texts, scale=(1.0
     normals = []
     tex_coords = []
 
-    for tx, ty, tz in texture_coords[direction_index]:
+    for tx, ty, tz in texture_coords[face]:
         tex_coords.append(texture_positions[tx][0])
         tex_coords.append(texture_positions[ty][1] * h)
         tex_coords.append(tz)
 
-    for i, (sx, sy, sz) in enumerate(cube_signs[direction_index]):
+    for i, (sx, sy, sz) in enumerate(cube_signs[face]):
         vertices.extend([x + (w * sx), y + (h * sy), z + (d * sz)])
         colors.extend([*texture_color[texture_name]])
-        normals.extend([*cube_normals[direction_index]])
+        normals.extend([*cube_normals[face]])
 
     verts.extend(vertices)
     cols.extend(colors)
