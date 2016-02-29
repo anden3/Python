@@ -214,14 +214,11 @@ class Camera(object):
     world_pos = None
     current_chunk = None
     current_tile = None
-    direction = None
-
     modelview = None
 
-    last_hit = None
-    last_hit_color = None
-
     flying = False
+
+    holding_block = "snow"
 
     ui = VBO(size=1000)
 
@@ -254,7 +251,7 @@ class Camera(object):
 
         add_rect(704, 449, 32, 2, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords)
         add_rect(719, 434, 2, 32, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords)
-        add_rect(704, 200, 32, 32, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords, image="blue wool")
+        add_rect(704, 200, 32, 32, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords, image=self.holding_block)
 
         self.ui.data("texture", texture, 0)
         self.ui.data("vertex", to_gl_float(vertices), 0)
@@ -297,9 +294,26 @@ class Camera(object):
             self.vx -= math.cos(math.radians(self.ry)) * self.speed_mult * dt
             self.vz += math.sin(math.radians(self.ry)) * self.speed_mult * dt
 
+    # noinspection PyProtectedMember
     def key_down(self, symbol, modifiers):
         if symbol == key.F:
             self.flying = not self.flying
+
+        elif symbol == key._1:
+            self.holding_block = "snow"
+            self.init_ui()
+
+        elif symbol == key._2:
+            self.holding_block = "grass"
+            self.init_ui()
+
+        elif symbol == key._3:
+            self.holding_block = "sand"
+            self.init_ui()
+
+        elif symbol == key._4:
+            self.holding_block = "blue wool"
+            self.init_ui()
 
         elif symbol == key.ESCAPE:
             time.get("all")
@@ -315,7 +329,7 @@ class Camera(object):
             if button == 1:
                 chunks[hit[0]].remove_block(hit[1])
             elif button == 4:
-                chunks[hit[2][0]].create_block(hit[2][1], new=True)
+                chunks[hit[2][0]].create_block(hit[2][1], new=self.holding_block)
 
     def mouse_drag(self, x, y, dx, dy, buttons, modifers):
         self.mouse_move(x, y, dx, dy)
@@ -359,7 +373,7 @@ class Camera(object):
 
             if checking_chunk in active_chunks:
                 if checking_tile in chunks[checking_chunk].blocks:
-                    if last_pos is not None:
+                    if last_pos is not None and get_chunk_pos(last_pos) is not None:
                         return checking_chunk, checking_tile, get_chunk_pos(last_pos)
                     else:
                         return checking_chunk, checking_tile
@@ -406,16 +420,18 @@ class Camera(object):
 
             if ground_dist_down == 0 and ground_dist_up == 0:
                 self.vy = 0
+                self.y -= self.y - (int(self.y) + 0.7)
 
                 if keys[key.SPACE]:
                     self.vy += 10
 
             elif ground_dist_down is None:
-                if ground_dist_up > 2:
-                    self.y += ground_dist_up
-                    self.vy = 0
-                else:
-                    self.vy = 9.82
+                if ground_dist_up is not None:
+                    if ground_dist_up > 2:
+                        self.y += ground_dist_up
+                        self.vy = 0
+                    else:
+                        self.vy = 9.82
 
             elif ground_dist_down > 0:
                 self.vy -= 9.82 * dt
@@ -442,7 +458,6 @@ class Chunk:
         self.cx, self.cz = pos
 
         self.vbo = VBO()
-        self.heightmap = {}
         self.blocks = {}
 
         self.offset = 0
@@ -459,8 +474,6 @@ class Chunk:
 
                 noise_height = noise.snoise3(x / zoom, z / zoom, seed, octaves=3)
                 height = round((noise_height + 1) / 2 * chunk_height)
-
-                self.heightmap[(sx, sz)] = height
 
                 texture_name = None
 
@@ -516,7 +529,7 @@ class Chunk:
 
         self.vbo.data("color", [*color] * length, offset)
 
-    def create_block(self, tile, new=False):
+    def create_block(self, tile, new=None):
         data = ([], [], [], [])
         data_names = ["vertex", "color", "normal", "texture_coords"]
 
@@ -567,9 +580,6 @@ class Chunk:
         self.blocks.pop(tile)
         self.block_map[tile[0]][tile[1]][tile[2]] = 0
 
-        if tile[1] == self.heightmap[(tile[0]), tile[2]]:
-            self.heightmap[(tile[0]), tile[2]] -= 1
-
         self.vbo = VBO()
         self.offset = 0
 
@@ -588,19 +598,18 @@ class Chunk:
 
         if len(chunk_list) > 0:
             for chunk in chunk_list:
+                chunks[chunk].vbo = VBO()
+                chunks[chunk].offset = 0
                 chunks[chunk].mesh()
 
-    def add_block(self, tile, data, new=False):
+    def add_block(self, tile, data, new=None):
         sx, sy, sz = tile
 
         x = sx + self.cx * chunk_size
         z = sz + self.cz * chunk_size
 
-        if new:
-            if (sx, sy - 1, sz) in self.blocks:
-                texture_name = self.blocks[(sx, sy - 1, sz)]['texture']
-            else:
-                texture_name = "grass"
+        if new is not None:
+            texture_name = new
 
             self.blocks[(sx, sy, sz)] = {
                 'texture': texture_name
