@@ -18,7 +18,7 @@ chunks = {}
 active_chunks = set()
 
 chunk_size = 16
-height_multiplier = 64
+chunk_height = 64
 render_distance = 3
 
 zoom = 100
@@ -112,7 +112,7 @@ def init():
 class VBO:
     def __init__(self, size=None):
         if size is None:
-            self.buffer_size = chunk_size ** 2 * height_multiplier * 24 * 2
+            self.buffer_size = chunk_size ** 2 * chunk_height * 24 * 2
         else:
             self.buffer_size = size
 
@@ -199,7 +199,7 @@ class VBO:
 
 # noinspection PyUnusedLocal
 class Camera(object):
-    x, y, z = 0, height_multiplier, 0
+    x, y, z = 0, chunk_height - 5, 0
     rx, ry = 340, 0
     w, h = 1920, 1080
     far = 8192
@@ -208,7 +208,7 @@ class Camera(object):
     vx, vy, vz = 0, 0, 0
 
     speed_mult = 5
-    camera_height = 2
+    camera_height = 1.7
     range = 5
 
     world_pos = None
@@ -366,30 +366,60 @@ class Camera(object):
 
             last_pos = checking_pos
 
+    def vertical_distance(self, direction):
+        x, z = self.current_tile[0], self.current_tile[2]
+        ground_pos = int(self.y - self.camera_height - 1)
+
+        if direction == 'down':
+            end = 0
+            step = -1
+
+        else:
+            end = chunk_height
+            step = 1
+
+        for y in numpy.arange(ground_pos, end, step):
+            if (x, y, z) in chunks[self.current_chunk].blocks:
+                if abs((self.y - self.camera_height - 1) - y) < 0.3:
+                    return 0
+
+                return abs((self.y - self.camera_height - 1) - y)
+
     def update(self, dt):
         self.get_world_pos()
+
+        if dt >= 0.1:
+            return
 
         try:
             self.key_loop(dt)
         except NameError:
             pass
 
-        if (not self.flying and self.current_chunk in active_chunks and
-           (self.current_tile[0], self.current_tile[2]) in chunks[self.current_chunk].heightmap):
-            height_diff = self.y - chunks[self.current_chunk].heightmap[(self.current_tile[0], self.current_tile[2])] - self.camera_height - 1
+        if self.y < 5:
+            self.y = 5
+            self.vy = 0
 
-            if abs(height_diff) < 0.01:
+        if not self.flying and self.current_chunk in active_chunks:
+            ground_dist_down = self.vertical_distance('down')
+            ground_dist_up = self.vertical_distance('up')
+
+            if ground_dist_down == 0 and ground_dist_up == 0:
                 self.vy = 0
 
                 if keys[key.SPACE]:
                     self.vy += 10
 
-            elif height_diff > 0:
+            elif ground_dist_down is None:
+                if ground_dist_up > 2:
+                    self.y += ground_dist_up
+                    self.vy = 0
+                else:
+                    self.vy = 9.82
+
+            elif ground_dist_down > 0:
                 self.vy -= 9.82 * dt
 
-            elif height_diff < 0:
-                self.y -= height_diff * 0.3
-                self.vy = 0
         else:
             self.vy = 0
 
@@ -417,7 +447,7 @@ class Chunk:
 
         self.offset = 0
 
-        self.block_map = numpy.zeros((chunk_size, height_multiplier, chunk_size), dtype=numpy.uint8)
+        self.block_map = numpy.zeros((chunk_size, chunk_height, chunk_size), dtype=numpy.uint8)
 
         self.is_meshed = False
 
@@ -428,7 +458,7 @@ class Chunk:
                 z = sz + self.cz * chunk_size
 
                 noise_height = noise.snoise3(x / zoom, z / zoom, seed, octaves=3)
-                height = round((noise_height + 1) / 2 * height_multiplier)
+                height = round((noise_height + 1) / 2 * chunk_height)
 
                 self.heightmap[(sx, sz)] = height
 
@@ -482,7 +512,7 @@ class Chunk:
 
     def set_color(self, tile, color):
         offset = self.blocks[tile]['offset']
-        length = bin(self.blocks[tile]['faces']).count('1')
+        # length = bin(self.blocks[tile]['faces']).count('1')
 
         self.vbo.data("color", [*color] * length, offset)
 
