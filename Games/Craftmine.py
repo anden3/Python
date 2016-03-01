@@ -28,17 +28,17 @@ seed = random.uniform(-1000, 1000)
 directions = ["left", "right", "bottom", "top", "front", "back"]
 
 texture_pos = {
-    "snow": (0, 0),
-    "grass": (1, 0),
-    "sand": (0, 1),
-    "blue wool": (1, 1)
+    1: (0, 0),
+    2: (1, 0),
+    3: (0, 1),
+    4: (1, 1)
 }
 
 texture_color = {
-    "snow": (0.8, 0.8, 0.8, 1.0),
-    "grass": (0.0, 0.5, 0.0, 1.0),
-    "sand": (0.76, 0.7, 0.5, 1.0),
-    "blue wool": (0.0, 0.0, 0.5, 1.0)
+    1: (0.8, 0.8, 0.8, 1.0),
+    2: (0.0, 0.5, 0.0, 1.0),
+    3: (0.76, 0.7, 0.5, 1.0),
+    4: (0.0, 0.0, 0.5, 1.0)
 }
 
 cube_signs = [
@@ -221,7 +221,7 @@ class Camera(object):
 
     flying = False
 
-    holding_block = "snow"
+    holding_block = 1
 
     ui = VBO(size=1000)
 
@@ -267,11 +267,11 @@ class Camera(object):
         else:
             self.speed_mult = 5
 
-        if keys[key.NUM_SUBTRACT]:
+        if keys[key.MINUS]:  # Actually Plus...
             self.fov -= self.speed_mult * dt
             self.perspective()
 
-        elif keys[key.NUM_ADD]:
+        elif keys[key.SLASH]:  # Actually Minus...
             self.fov += self.speed_mult * dt
             self.perspective()
 
@@ -303,19 +303,19 @@ class Camera(object):
             self.flying = not self.flying
 
         elif symbol == key._1:
-            self.holding_block = "snow"
+            self.holding_block = 1
             self.init_ui()
 
         elif symbol == key._2:
-            self.holding_block = "grass"
+            self.holding_block = 2
             self.init_ui()
 
         elif symbol == key._3:
-            self.holding_block = "sand"
+            self.holding_block = 3
             self.init_ui()
 
         elif symbol == key._4:
-            self.holding_block = "blue wool"
+            self.holding_block = 4
             self.init_ui()
 
         elif symbol == key.ESCAPE:
@@ -470,23 +470,23 @@ class Chunk:
                 noise_height = noise.snoise3(x / zoom, z / zoom, seed, octaves=3)
                 height = round((noise_height + 1) / 2 * chunk_height)
 
-                texture_name = None
+                block_id = None
 
-                if -1.0 <= noise_height < -0.33:
-                    texture_name = "blue wool"
-
-                elif -0.33 <= noise_height < -0.11:
-                    texture_name = "sand"
+                if 0.66 <= noise_height <= 1.0:
+                    block_id = 1
 
                 elif -0.11 <= noise_height < 0.66:
-                    texture_name = "grass"
+                    block_id = 2
 
-                elif 0.66 <= noise_height <= 1.0:
-                    texture_name = "snow"
+                elif -0.33 <= noise_height < -0.11:
+                    block_id = 3
+
+                elif -1.0 <= noise_height < -0.33:
+                    block_id = 4
 
                 for y in range(height - 2, height + 1):
                     self.blocks[(sx, y, sz)] = {
-                        'texture': texture_name
+                        'texture': block_id
                     }
 
                 for y in range(0, height + 1):
@@ -504,8 +504,14 @@ class Chunk:
 
         self.vbo.data("texture", texture, 0)
 
+        data = ([], [], [], [])
+        data_names = ["vertex", "color", "normal", "texture_coords"]
+
         for pos in self.blocks.copy():
-            self.create_block(pos)
+            self.create_block(pos, data=data)
+
+        for i, data_list in enumerate(data):
+            self.vbo.data(data_names[i], data_list, 0)
 
         self.is_meshed = True
 
@@ -524,15 +530,18 @@ class Chunk:
 
         self.vbo.data("color", [*color] * length, offset)
 
-    def create_block(self, tile, new=None):
-        data = ([], [], [], [])
+    def create_block(self, tile, new=None, data=None):
         data_names = ["vertex", "color", "normal", "texture_coords"]
+
+        if data is None:
+            data = ([], [], [], [])
 
         if self.add_block(tile, data, new=new):
             offset = self.blocks[tile]['offset']
 
-            for i, data_list in enumerate(data):
-                self.vbo.data(data_names[i], data_list, offset)
+            if data is None:
+                for i, data_list in enumerate(data):
+                    self.vbo.data(data_names[i], data_list, offset)
 
     def get_neighbors(self, tile, get_faces=False):
         x, y, z = tile
@@ -586,7 +595,7 @@ class Chunk:
 
             if neighbor not in chunks[chunk].blocks:
                 chunks[chunk].blocks[neighbor] = {
-                    'texture': "grass"
+                    'texture': 2
                 }
 
         self.mesh()
@@ -604,13 +613,13 @@ class Chunk:
         z = sz + self.cz * chunk_size
 
         if new is not None:
-            texture_name = new
+            texture_id = new
 
             self.blocks[(sx, sy, sz)] = {
-                'texture': texture_name
+                'texture': texture_id
             }
         else:
-            texture_name = self.blocks[tile]['texture']
+            texture_id = self.blocks[tile]['texture']
 
         neighbors = self.get_neighbors((sx, sy, sz), get_faces=True)
 
@@ -620,7 +629,7 @@ class Chunk:
 
         for i, face in enumerate(neighbors):
             if face == 0:
-                add_face((x, sy, z), i, texture_name, *data)
+                add_face((x, sy, z), i, texture_id, *data)
 
         self.blocks[(sx, sy, sz)]['offset'] = self.offset
         self.offset += (6 - sum(neighbors)) * 4
