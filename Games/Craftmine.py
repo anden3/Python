@@ -208,6 +208,7 @@ class Camera(object):
     vx, vy, vz = 0, 0, 0
 
     speed_mult = 5
+    jump_height = 5
     camera_height = 1.7
     range = 5
 
@@ -215,6 +216,8 @@ class Camera(object):
     current_chunk = None
     current_tile = None
     modelview = None
+
+    last_pos = None
 
     flying = False
 
@@ -238,11 +241,11 @@ class Camera(object):
         glDisable(GL_CULL_FACE)
         glDisable(GL_TEXTURE_2D)
         glDisable(GL_LIGHTING)
-        
+
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
         gluOrtho2D(-self.w / 2, self.w / 2, -self.h / 2, self.h / 2)
-        
+
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
 
@@ -328,7 +331,7 @@ class Camera(object):
         if hit is not None and hit[0] is not None and hit[1] is not None:
             if button == 1:
                 chunks[hit[0]].remove_block(hit[1])
-            elif button == 4:
+            elif button == 4 and len(hit) == 3:
                 chunks[hit[2][0]].create_block(hit[2][1], new=self.holding_block)
 
     def mouse_drag(self, x, y, dx, dy, buttons, modifers):
@@ -380,24 +383,13 @@ class Camera(object):
 
             last_pos = checking_pos
 
-    def vertical_distance(self, direction):
-        x, z = self.current_tile[0], self.current_tile[2]
-        ground_pos = int(self.y - self.camera_height - 1)
+    def check_player_col(self):
+        roof_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y) + 1][self.current_tile[2]] == 1
+        head_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y)][self.current_tile[2]] == 1
+        body_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y) - 1][self.current_tile[2]] == 1
+        ground_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y) - 2][self.current_tile[2]] == 1
 
-        if direction == 'down':
-            end = 0
-            step = -1
-
-        else:
-            end = chunk_height
-            step = 1
-
-        for y in numpy.arange(ground_pos, end, step):
-            if (x, y, z) in chunks[self.current_chunk].blocks:
-                if abs((self.y - self.camera_height - 1) - y) < 0.3:
-                    return 0
-
-                return abs((self.y - self.camera_height - 1) - y)
+        return roof_colliding, head_colliding, body_colliding, ground_colliding
 
     def update(self, dt):
         self.get_world_pos()
@@ -410,32 +402,35 @@ class Camera(object):
         except NameError:
             pass
 
-        if self.y < 5:
-            self.y = 5
-            self.vy = 0
-
         if not self.flying and self.current_chunk in active_chunks:
-            ground_dist_down = self.vertical_distance('down')
-            ground_dist_up = self.vertical_distance('up')
+            if 2 <= self.y < chunk_height:
+                roof_col, head_col, body_col, ground_col = self.check_player_col()
 
-            if ground_dist_down == 0 and ground_dist_up == 0:
-                self.vy = 0
-                self.y -= self.y - (int(self.y) + 0.7)
+                if not head_col and not body_col:
+                    self.last_pos = self.world_pos
 
-                if keys[key.SPACE]:
-                    self.vy += 10
-
-            elif ground_dist_down is None:
-                if ground_dist_up is not None:
-                    if ground_dist_up > 2:
-                        self.y += ground_dist_up
+                    if ground_col:
                         self.vy = 0
+
+                        if keys[key.SPACE]:
+                            self.vy += self.jump_height
+                        else:
+                            self.y -= self.y - (int(self.y) + 0.7)
                     else:
-                        self.vy = 9.82
+                        self.vy -= 9.82 * dt
 
-            elif ground_dist_down > 0:
+                elif body_col or head_col:
+                    dx = self.world_pos[0] - self.last_pos[0]
+                    dz = self.world_pos[2] - self.last_pos[2]
+
+                    self.vx -= dx
+                    self.vz -= dz
+
+                if roof_col:
+                    if self.vy > 0:
+                        self.vy = 0
+            else:
                 self.vy -= 9.82 * dt
-
         else:
             self.vy = 0
 
