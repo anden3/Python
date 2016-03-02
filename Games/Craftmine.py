@@ -21,6 +21,8 @@ chunk_size = 16
 chunk_height = 64
 render_distance = 3
 
+window_width, window_height = 0, 0
+
 zoom = 100
 
 seed = random.uniform(-1000, 1000)
@@ -201,7 +203,7 @@ class VBO:
 class Camera(object):
     x, y, z = 0, chunk_height - 5, 0
     rx, ry = 340, 0
-    w, h = 1920, 1080
+    w, h = window_width, window_height
     far = 8192
     fov = 90
 
@@ -384,10 +386,10 @@ class Camera(object):
             last_pos = checking_pos
 
     def check_player_col(self):
-        roof_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y) + 1][self.current_tile[2]] == 1
-        head_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y)][self.current_tile[2]] == 1
-        body_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y) - 1][self.current_tile[2]] == 1
-        ground_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y) - 2][self.current_tile[2]] == 1
+        roof_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y) + 1][self.current_tile[2]] > 0
+        head_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y)][self.current_tile[2]] > 0
+        body_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y) - 1][self.current_tile[2]] > 0
+        ground_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y) - 2][self.current_tile[2]] > 0
 
         return roof_colliding, head_colliding, body_colliding, ground_colliding
 
@@ -453,11 +455,12 @@ class Chunk:
         self.cx, self.cz = pos
 
         self.vbo = VBO()
-        self.blocks = {}
+        self.blocks = set()
 
         self.offset = 0
 
         self.block_map = numpy.zeros((chunk_size, chunk_height, chunk_size), dtype=numpy.uint8)
+        self.offsets = numpy.zeros((chunk_size, chunk_height, chunk_size), dtype=numpy.uint32)
 
         self.is_meshed = False
 
@@ -485,12 +488,9 @@ class Chunk:
                     block_id = 4
 
                 for y in range(height - 2, height + 1):
-                    self.blocks[(sx, y, sz)] = {
-                        'texture': block_id
-                    }
+                    self.blocks.add((sx, y, sz))
 
-                for y in range(0, height + 1):
-                    self.block_map[sx][y][sz] = 1
+                self.block_map[sx, 0:height + 1, sz] = block_id
 
     def mesh(self):
         if not self.is_meshed:
@@ -508,7 +508,7 @@ class Chunk:
         data_names = ["vertex", "color", "normal", "texture_coords"]
 
         for pos in self.blocks.copy():
-            self.create_block(pos, data=data)
+            self.create_block(pos, external_data=data)
 
         for i, data_list in enumerate(data):
             self.vbo.data(data_names[i], data_list, 0)
@@ -517,7 +517,7 @@ class Chunk:
 
     def get_color(self, tile):
         self.vbo.color()
-        offset = self.blocks[tile]['offset']
+        offset = self.offsets.item(tile)
 
         data = to_gl_float([0] * 4)
         glGetBufferSubData(GL_ARRAY_BUFFER, offset * 16, 16, data)
@@ -525,23 +525,10 @@ class Chunk:
         return list(data)
 
     def set_color(self, tile, color):
-        offset = self.blocks[tile]['offset']
-        # length = bin(self.blocks[tile]['faces']).count('1')
+        offset = self.offsets.item(tile)
+        length = 6 - len(self.get_neighbors(tile))
 
         self.vbo.data("color", [*color] * length, offset)
-
-    def create_block(self, tile, new=None, data=None):
-        data_names = ["vertex", "color", "normal", "texture_coords"]
-
-        if data is None:
-            data = ([], [], [], [])
-
-        if self.add_block(tile, data, new=new):
-            offset = self.blocks[tile]['offset']
-
-            if data is None:
-                for i, data_list in enumerate(data):
-                    self.vbo.data(data_names[i], data_list, offset)
 
     def get_neighbors(self, tile, get_faces=False):
         x, y, z = tile
@@ -572,17 +559,23 @@ class Chunk:
                 sz -= 16
                 cz += 1
 
+            value = chunks[(cx, cz)].block_map.item((sx, sy, sz))
+
             if get_faces:
-                tile_neighbors.append(chunks[(cx, cz)].block_map[sx][sy][sz])
+                if value > 0:
+                    tile_neighbors.append(1)
+                else:
+                    tile_neighbors.append(0)
             else:
-                if chunks[(cx, cz)].block_map[sx][sy][sz] == 1:
-                    tile_neighbors.append(((cx, cz), neighbor))
+                if value > 0:
+                    tile_neighbors.append(((cx, cz), (sx, sy, sz)))
 
         return tile_neighbors
 
     def remove_block(self, tile):
-        self.blocks.pop(tile)
-        self.block_map[tile[0]][tile[1]][tile[2]] = 0
+        self.blocks.remove(tile)
+        self.block_map.itemset(tile, 0)
+        self.offsets.itemset(tile, 0)
 
         self.vbo = VBO()
         self.offset = 0
@@ -594,9 +587,8 @@ class Chunk:
                 chunk_list.append(chunk)
 
             if neighbor not in chunks[chunk].blocks:
-                chunks[chunk].blocks[neighbor] = {
-                    'texture': 2
-                }
+                chunks[chunk].blocks.add(neighbor)
+                chunks[chunk].block_map.itemset(neighbor, 2)
 
         self.mesh()
 
@@ -606,40 +598,44 @@ class Chunk:
                 chunks[chunk].offset = 0
                 chunks[chunk].mesh()
 
-    def add_block(self, tile, data, new=None):
-        sx, sy, sz = tile
+    def create_block(self, tile, new=None, external_data=None):
+        data_names = ["vertex", "color", "normal", "texture_coords"]
 
-        x = sx + self.cx * chunk_size
-        z = sz + self.cz * chunk_size
+        if external_data is None:
+            data = ([], [], [], [])
+
+            if self.add_block(tile, data, new=new):
+                offset = self.offsets.item(tile)
+
+                for i, data_list in enumerate(data):
+                    self.vbo.data(data_names[i], data_list, offset)
+        else:
+            self.add_block(tile, external_data, new=new)
+
+    def add_block(self, tile, data, new=None):
+        x = tile[0] + self.cx * chunk_size
+        z = tile[2] + self.cz * chunk_size
 
         if new is not None:
             texture_id = new
-
-            self.blocks[(sx, sy, sz)] = {
-                'texture': texture_id
-            }
+            self.blocks.add(tile)
+            self.block_map.itemset(tile, texture_id)
         else:
-            texture_id = self.blocks[tile]['texture']
+            texture_id = self.block_map.item(tile)
 
-        neighbors = self.get_neighbors((sx, sy, sz), get_faces=True)
+        neighbors = self.get_neighbors(tile, get_faces=True)
 
         if sum(neighbors) == 6:
-            del self.blocks[(sx, sy, sz)]
+            self.blocks.remove(tile)
             return False
 
         for i, face in enumerate(neighbors):
             if face == 0:
-                add_face((x, sy, z), i, texture_id, *data)
+                add_face((x, tile[1], z), i, texture_id, *data)
 
-        self.blocks[(sx, sy, sz)]['offset'] = self.offset
+        self.offsets.itemset(tile, self.offset)
         self.offset += (6 - sum(neighbors)) * 4
         return True
-
-
-def distance(p1, p2):
-    assert len(p1) == len(p2)
-
-    return math.sqrt(sum([(p2[i] - p1[i]) ** 2 for i in range(len(p1))]))
 
 
 # noinspection PyCallingNonCallable
@@ -686,8 +682,8 @@ def add_face(pos, face, texture_name, verts, cols, norms, texts, scale=(1.0, 1.0
 
 
 def add_rect(x, y, w, h, color, verts, cols, texts, image=None):
-    x -= 720
-    y -= 450
+    x -= window_width / 2
+    y -= window_height / 2
 
     verts.extend([x + w, y + h, 0, x + w, y, 0, x, y, 0, x, y + h, 0])
     cols.extend([*color] * 4)
@@ -722,12 +718,11 @@ def render_light(pos, direction, angle, attenuation=0):
     glEnable(GL_LIGHT0)
 
 
-def check_draw_distance():
-    current_chunk = window.cam.current_chunk
+def check_draw_distance(chunk):
     active_chunks.clear()
 
-    for cx in range(current_chunk[0] - render_distance, current_chunk[0] + render_distance + 1):
-        for cz in range(current_chunk[1] - render_distance, current_chunk[1] + render_distance + 1):
+    for cx in range(chunk[0] - render_distance, chunk[0] + render_distance + 1):
+        for cz in range(chunk[1] - render_distance, chunk[1] + render_distance + 1):
             pos = (cx, cz)
 
             if pos not in chunks:
@@ -746,6 +741,9 @@ class CameraWindow(pyglet.window.Window):
         super(CameraWindow, self).__init__(resizable=True)
         self.maximize()
         self.set_fullscreen()
+
+        global window_width, window_height
+        window_width, window_height = self.width, self.height
 
         self.set_exclusive_mouse(True)
 
@@ -776,7 +774,7 @@ class CameraWindow(pyglet.window.Window):
         glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE)
         glEnable(GL_COLOR_MATERIAL)
 
-        check_draw_distance()
+        check_draw_distance(self.cam.current_chunk)
 
         for chunk in active_chunks:
             chunks[chunk].vbo.draw()
