@@ -19,6 +19,7 @@ active_chunks = set()
 
 chunk_size = 16
 chunk_height = 64
+height_offset = 64
 render_distance = 3
 
 window_width, window_height = 0, 0
@@ -201,7 +202,7 @@ class VBO:
 
 # noinspection PyUnusedLocal
 class Camera(object):
-    x, y, z = 0, chunk_height - 5, 0
+    x, y, z = 0, chunk_height + height_offset - 5, 0
     rx, ry = 340, 0
     w, h = window_width, window_height
     far = 8192
@@ -213,19 +214,33 @@ class Camera(object):
     jump_height = 5
     camera_height = 1.7
     range = 5
+    velocity = (0, 0, 0)
 
     world_pos = None
-    current_chunk = None
-    current_tile = None
+    current_chunk = (0, 0)
+    current_tile = (0, y, 0)
     modelview = None
 
     last_pos = None
 
     flying = False
+    jumping = False
 
     holding_block = 1
 
     ui = VBO(size=1000)
+    text = pyglet.graphics.Batch()
+
+    last_chunk_written = current_chunk
+    last_tile_written = current_tile
+    last_world_pos_written = (0, y, 0)
+    last_rotation_written = (rx, ry)
+    last_velocity_written = (vx, vy, vz)
+
+    document = None
+    layout = None
+
+    document_offsets = {}
 
     def view(self, width, height):
         self.w, self.h = width, height
@@ -252,16 +267,105 @@ class Camera(object):
         glLoadIdentity()
 
     def init_ui(self):
+        self.ui.data("texture", texture, 0)
+
         vertices, colors, tex_coords = [], [], []
 
         add_rect(704, 449, 32, 2, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords)
         add_rect(719, 434, 2, 32, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords)
         add_rect(704, 200, 32, 32, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords, image=self.holding_block)
 
-        self.ui.data("texture", texture, 0)
         self.ui.data("vertex", to_gl_float(vertices), 0)
         self.ui.data("color", to_gl_float(colors), 0)
         self.ui.data("texture_coords", to_gl_float(tex_coords), 0)
+
+    def update_ui(self):
+        vertices, colors, tex_coords = [], [], []
+
+        add_rect(704, 200, 32, 32, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords, image=self.holding_block)
+
+        self.ui.data("vertex", to_gl_float(vertices), 24)
+        self.ui.data("color", to_gl_float(colors), 24)
+        self.ui.data("texture_coords", to_gl_float(tex_coords), 24)
+
+    def init_text(self):
+        world_pos = (int(self.world_pos[0]), int(self.world_pos[1]), int(self.world_pos[2]))
+        rotation = (int(self.rx), int(self.ry))
+        velocity = (int(self.velocity[0]), int(self.velocity[1]), int(self.velocity[2]))
+
+        self.document = pyglet.text.decode_text("Chunk: " + str(self.current_chunk) + "\n")
+        self.document.insert_text(8 + len(str(self.current_chunk)), "Tile: " + str(self.current_tile) + "\n")
+        self.document.insert_text(16 + len(str(self.current_chunk)) + len(str(self.current_tile)),
+                                  "World Position: " + str(world_pos) + "\n\n")
+        self.document.insert_text(34 + len(str(self.current_chunk)) + len(str(self.current_tile)) + len(str(world_pos)),
+                                  "Rotation: " + str(rotation) + "\n")
+        self.document.insert_text(45 + len(str(self.current_chunk)) + len(str(self.current_tile)) + len(str(world_pos)) + len(str(rotation)),
+                                  "Velocity: " + str(velocity))
+
+        self.document.set_style(0, -1, dict(color=(255, 255, 255, 255)))
+
+        self.layout = pyglet.text.layout.TextLayout(self.document, width=300, height=300, multiline=True, batch=self.text)
+        self.layout.x = -(window_width / 2) + 50
+        self.layout.y = window_height / 4 - 120
+
+    def update_text_offsets(self):
+        elements_to_update = []
+        world_pos = (int(self.world_pos[0]), int(self.world_pos[1]), int(self.world_pos[2]))
+        rotation = (int(self.rx), int(self.ry))
+        velocity = (round(self.velocity[0], 3), round(self.velocity[1], 3), round(self.velocity[2], 3))
+
+        chunk_start = 7
+        tile_start = chunk_start + 7 + len(str(self.current_chunk))
+        world_pos_start = tile_start + 17 + len(str(self.current_tile))
+        rotation_start = world_pos_start + 11 + len(str(world_pos))
+        velocity_start = rotation_start + 11 + len(str(rotation))
+
+        self.document_offsets['chunk'] = [chunk_start,
+                                          chunk_start + len(str(self.last_chunk_written))]
+        self.document_offsets['tile'] = [tile_start,
+                                         tile_start + len(str(self.last_tile_written))]
+        self.document_offsets['world_pos'] = [world_pos_start,
+                                              world_pos_start + len(str(self.last_world_pos_written))]
+        self.document_offsets['rotation'] = [rotation_start,
+                                             rotation_start + len(str(self.last_rotation_written))]
+        self.document_offsets['velocity'] = [velocity_start,
+                                             velocity_start + len(str(self.last_velocity_written))]
+
+        if self.last_chunk_written != self.current_chunk:
+            self.last_chunk_written = self.current_chunk
+            elements_to_update.append(('chunk', str(self.current_chunk)))
+
+        if self.last_tile_written != self.current_tile:
+            self.last_tile_written = self.current_tile
+            elements_to_update.append(('tile', str(self.current_tile)))
+
+        if self.last_world_pos_written != world_pos:
+            self.last_world_pos_written = world_pos
+            elements_to_update.append(('world_pos', str(world_pos)))
+
+        if self.last_rotation_written != rotation:
+            self.last_rotation_written = rotation
+            elements_to_update.append(('rotation', str(rotation)))
+
+        if self.last_velocity_written != velocity:
+            self.last_velocity_written = velocity
+            elements_to_update.append(('velocity', str(velocity)))
+
+        return elements_to_update
+
+    def draw_text(self):
+        elements = self.update_text_offsets()
+
+        if len(elements) > 0:
+            self.layout.begin_update()
+
+            for element, value in elements:
+                self.document.delete_text(*self.document_offsets[element])
+                self.document.insert_text(self.document_offsets[element][0], value)
+
+            self.layout.end_update()
+
+        self.text.draw()
 
     def key_loop(self, dt):
         if keys[key.LSHIFT]:
@@ -306,19 +410,19 @@ class Camera(object):
 
         elif symbol == key._1:
             self.holding_block = 1
-            self.init_ui()
+            self.update_ui()
 
         elif symbol == key._2:
             self.holding_block = 2
-            self.init_ui()
+            self.update_ui()
 
         elif symbol == key._3:
             self.holding_block = 3
-            self.init_ui()
+            self.update_ui()
 
         elif symbol == key._4:
             self.holding_block = 4
-            self.init_ui()
+            self.update_ui()
 
         elif symbol == key.ESCAPE:
             time.get("all")
@@ -385,11 +489,17 @@ class Camera(object):
 
             last_pos = checking_pos
 
-    def check_player_col(self):
-        roof_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y) + 1][self.current_tile[2]] > 0
-        head_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y)][self.current_tile[2]] > 0
-        body_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y) - 1][self.current_tile[2]] > 0
-        ground_colliding = chunks[self.current_chunk].block_map[self.current_tile[0]][int(self.y) - 2][self.current_tile[2]] > 0
+    def check_player_col(self, tile=None, chunk=None):
+        if tile is None:
+            tile = self.current_tile
+
+        if chunk is None:
+            chunk = self.current_chunk
+
+        roof_colliding = chunks[chunk].block_map[tile[0]][int(self.y) + 1][tile[2]] > 0
+        head_colliding = chunks[chunk].block_map[tile[0]][int(self.y)][tile[2]] > 0
+        body_colliding = chunks[chunk].block_map[tile[0]][int(self.y) - 1][tile[2]] > 0
+        ground_colliding = chunks[chunk].block_map[tile[0]][int(self.y) - 2][tile[2]] > 0
 
         return roof_colliding, head_colliding, body_colliding, ground_colliding
 
@@ -405,28 +515,44 @@ class Camera(object):
             pass
 
         if not self.flying and self.current_chunk in active_chunks:
-            if 2 <= self.y < chunk_height:
-                roof_col, head_col, body_col, ground_col = self.check_player_col()
+            if 2 <= self.y < chunk_height + height_offset:
+                new_chunk, new_tile = get_chunk_pos((self.world_pos[0] + self.vx,
+                                                     self.world_pos[1] + self.vy * dt,
+                                                     self.world_pos[2] + self.vz))
+                roof_col, head_col, body_col, ground_col = self.check_player_col(tile=new_tile, chunk=new_chunk)
 
                 if not head_col and not body_col:
                     self.last_pos = self.world_pos
 
                     if ground_col:
                         self.vy = 0
+                        self.jumping = False
 
                         if keys[key.SPACE]:
                             self.vy += self.jump_height
+                            self.jumping = True
                         else:
-                            self.y -= self.y - (int(self.y) + 0.7)
+                            if self.y - (int(self.y) + 0.7) >= 0.05:
+                                self.vy -= 100 * dt
                     else:
                         self.vy -= 9.82 * dt
 
                 elif body_col or head_col:
-                    dx = self.world_pos[0] - self.last_pos[0]
-                    dz = self.world_pos[2] - self.last_pos[2]
+                    if body_col and head_col:
+                        self.vy = 0
 
-                    self.vx -= dx
-                    self.vz -= dz
+                    dx = abs(new_tile[0] - self.current_tile[0])
+                    dz = abs(new_tile[2] - self.current_tile[2])
+
+                    if dx != 0:
+                        self.vx = 0
+
+                    if dz != 0:
+                        self.vz = 0
+
+                    if not self.jumping and keys[key.SPACE]:
+                        self.jumping = True
+                        self.vy += self.jump_height
 
                 if roof_col:
                     if self.vy > 0:
@@ -435,6 +561,8 @@ class Camera(object):
                 self.vy -= 9.82 * dt
         else:
             self.vy = 0
+
+        self.velocity = (self.vx, self.vy, self.vz)
 
         self.x += self.vx
         self.y += self.vy * dt
@@ -459,19 +587,20 @@ class Chunk:
 
         self.offset = 0
 
-        self.block_map = numpy.zeros((chunk_size, chunk_height, chunk_size), dtype=numpy.uint8)
-        self.offsets = numpy.zeros((chunk_size, chunk_height, chunk_size), dtype=numpy.uint32)
+        self.block_map = numpy.zeros((chunk_size, chunk_height + height_offset, chunk_size), dtype=numpy.uint8)
+        self.offsets = numpy.zeros((chunk_size, chunk_height + height_offset, chunk_size), dtype=numpy.uint32)
 
         self.is_meshed = False
 
     def generate(self):
         for sx in range(chunk_size):
+            x = sx + self.cx * chunk_size
+
             for sz in range(chunk_size):
-                x = sx + self.cx * chunk_size
                 z = sz + self.cz * chunk_size
 
                 noise_height = noise.snoise3(x / zoom, z / zoom, seed, octaves=3)
-                height = round((noise_height + 1) / 2 * chunk_height)
+                height = round((noise_height + 1) / 2 * chunk_height) + height_offset
 
                 block_id = None
 
@@ -526,11 +655,11 @@ class Chunk:
 
     def set_color(self, tile, color):
         offset = self.offsets.item(tile)
-        length = 6 - len(self.get_neighbors(tile))
+        length = (6 - len(self.get_neighbors(tile))) * 4
 
         self.vbo.data("color", [*color] * length, offset)
 
-    def get_neighbors(self, tile, get_faces=False):
+    def get_neighbors(self, tile, get_faces=False, local_chunk=False):
         x, y, z = tile
 
         neighbors = [
@@ -558,6 +687,9 @@ class Chunk:
             elif sz > 15:
                 sz -= 16
                 cz += 1
+
+            if local_chunk and (cx, cz) != (self.cx, self.cz):
+                continue
 
             value = chunks[(cx, cz)].block_map.item((sx, sy, sz))
 
@@ -625,7 +757,7 @@ class Chunk:
 
         neighbors = self.get_neighbors(tile, get_faces=True)
 
-        if sum(neighbors) == 6:
+        if sum(neighbors) == 6 or sum(neighbors) == 0:
             self.blocks.remove(tile)
             return False
 
@@ -756,6 +888,7 @@ class CameraWindow(pyglet.window.Window):
 
         self.cam.update(0.0)
         self.cam.init_ui()
+        self.cam.init_text()
 
         pyglet.clock.schedule_interval(self.cam.update, 1 / 60)
 
@@ -782,6 +915,7 @@ class CameraWindow(pyglet.window.Window):
         self.cam.ui_mode()
 
         self.cam.ui.draw()
+        self.cam.draw_text()
 
         self.cam.perspective()
         self.cam.apply()
