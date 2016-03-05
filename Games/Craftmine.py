@@ -1,16 +1,17 @@
 import math
+import os
 import random
 from ctypes import *
+from threading import Timer
 
 import noise
 import numpy
 import pyglet
-from pyglet.gl import *
+import pyglet.gl as gl
 from pyglet.window import key
 
+from OpenAL import *
 from get_time import *
-
-# from gl_shader import Shader
 
 time = Time()
 
@@ -30,18 +31,13 @@ seed = random.uniform(-1000, 1000)
 
 directions = ["left", "right", "bottom", "top", "front", "back"]
 
-texture_pos = {
-    1: (0, 0),
-    2: (1, 0),
-    3: (0, 1),
-    4: (1, 1)
-}
-
 texture_color = {
-    1: (0.8, 0.8, 0.8, 1.0),
-    2: (0.0, 0.5, 0.0, 1.0),
-    3: (0.76, 0.7, 0.5, 1.0),
-    4: (0.0, 0.0, 0.5, 1.0)
+    1: (0.8, 0.8, 0.8, 1.0),    # Snow
+    2: (0.0, 0.5, 0.0, 1.0),    # Grass
+    3: (0.76, 0.7, 0.5, 1.0),   # Sand
+    4: (0.0, 0.0, 0.5, 1.0),    # Blue Wool
+    5: (0.4, 0.4, 0.4, 1.0),    # Stone
+    6: (0.4, 0.4, 0.4, 1.0),    # Iron Ore
 }
 
 cube_signs = [
@@ -75,34 +71,65 @@ texture_coords = [
 def init():
     config_time(silent=True)
 
-    glClearDepth(1.0)
+    gl.glClearDepth(1.0)
 
-    glEnable(GL_BLEND)
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-    glDepthFunc(GL_LEQUAL)
+    gl.glEnable(gl.GL_BLEND)
+    gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+    gl.glDepthFunc(gl.GL_LEQUAL)
 
-    glEnable(GL_DEPTH_TEST)
-    glDepthFunc(GL_LEQUAL)
-    glShadeModel(GL_SMOOTH)
-    glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST)
+    gl.glEnable(gl.GL_DEPTH_TEST)
+    gl.glDepthFunc(gl.GL_LEQUAL)
+    gl.glShadeModel(gl.GL_SMOOTH)
+    gl.glHint(gl.GL_PERSPECTIVE_CORRECTION_HINT, gl.GL_NICEST)
 
-    images = [
-        pyglet.image.load("images/snow.png").get_image_data(),
-        pyglet.image.load("images/grass_top.png").get_image_data(),
-        pyglet.image.load("images/sand.png").get_image_data(),
-        pyglet.image.load("images/wool_colored_blue.png").get_image_data()
-    ]
+    images = []
 
-    texture_atlas = pyglet.image.atlas.TextureAtlas(width=32, height=32)
+    for file in os.listdir('images'):
+        if file.endswith('.png'):
+            images.append(pyglet.image.load('images/' + file).get_image_data())
 
-    for image in images:
-        texture_atlas.add(image)
+    area = len(images) * 256
+    area_root = math.sqrt(area)
+
+    if area_root % 32 != 0:
+        atlas_width = int(area_root - (area_root % 32))
+        atlas_height = int(area / atlas_width)
+
+        if atlas_height % 32 != 0:
+            atlas_height += int(32 - (atlas_height % 32))
+    else:
+        atlas_width, atlas_height = int(area_root), int(area_root)
+
+    texture_atlas = pyglet.image.atlas.TextureAtlas(width=atlas_width, height=atlas_height)
+
+    global texture_pos
+    texture_pos = {}
+
+    for i, image in enumerate(images):
+        texture_region = texture_atlas.add(image)
+        texture_pos[i + 1] = [
+            [texture_region.x / atlas_width, texture_region.y / atlas_height],
+            [(texture_region.x + 16) / atlas_width, (texture_region.y + 16) / atlas_height]
+        ]
 
     global texture
     texture = texture_atlas.texture
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_REPEAT)
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_REPEAT)
+
+    global sounds
+    sounds = {}
+
+    for file in os.listdir("sounds"):
+        if file.endswith(".wav"):
+            if int(file[:1]) not in sounds:
+                sounds[int(file[:1])] = ["sounds/" + file]
+            else:
+                sounds[int(file[:1])].append("sounds/" + file)
+
+    global listener
+    listener = Listener()
 
     global window, keys
     window = CameraWindow()
@@ -133,14 +160,14 @@ class VBO:
 
     def generate(self):
         for buffer in ["vertex", "color", "normal", "texture_coords"]:
-            self.buffers[buffer] = GLuint(0)
-            glGenBuffers(1, self.buffers[buffer])
-            glBindBuffer(GL_ARRAY_BUFFER, self.buffers[buffer])
-            glBufferData(GL_ARRAY_BUFFER, self.buffer_size, None, GL_DYNAMIC_DRAW)
+            self.buffers[buffer] = gl.GLuint(0)
+            gl.glGenBuffers(1, self.buffers[buffer])
+            gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.buffers[buffer])
+            gl.glBufferData(gl.GL_ARRAY_BUFFER, self.buffer_size, None, gl.GL_DYNAMIC_DRAW)
 
     def data(self, buffer_type, data, offset):
         if buffer_type != "texture":
-            glBindBuffer(GL_ARRAY_BUFFER, self.buffers[buffer_type])
+            gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.buffers[buffer_type])
 
             if buffer_type == "color":
                 offset *= 16
@@ -148,56 +175,56 @@ class VBO:
                 offset *= 12
 
             gl_data = to_gl_float(data)
-            glBufferSubData(GL_ARRAY_BUFFER, offset, sizeof(gl_data), gl_data)
+            gl.glBufferSubData(gl.GL_ARRAY_BUFFER, offset, sizeof(gl_data), gl_data)
 
             if buffer_type == "vertex":
                 self.vertex_count += int(len(data) / 3)
 
         else:
-            self.buffers[buffer_type] = GLuint(0)
-            glGenTextures(1, self.buffers[buffer_type])
-            glBindTexture(data.target, data.id)
+            self.buffers[buffer_type] = gl.GLuint(0)
+            gl.glGenTextures(1, self.buffers[buffer_type])
+            gl.glBindTexture(data.target, data.id)
 
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture.width, texture.height, 0, GL_RGB, GL_UNSIGNED_BYTE,
-                         data.get_image_data().get_data("RGB", texture.width * 3))
-            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+            gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGB, texture.width, texture.height, 0, gl.GL_RGB, gl.GL_UNSIGNED_BYTE,
+                            data.get_image_data().get_data("RGB", texture.width * 3))
+            gl.glTexParameterf(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
 
     def vertex(self):
-        glBindBuffer(GL_ARRAY_BUFFER, self.buffers["vertex"])
-        glVertexPointer(3, GL_FLOAT, 0, 0)
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.buffers["vertex"])
+        gl.glVertexPointer(3, gl.GL_FLOAT, 0, 0)
 
     def color(self):
-        glBindBuffer(GL_ARRAY_BUFFER, self.buffers["color"])
-        glColorPointer(4, GL_FLOAT, 0, 0)
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.buffers["color"])
+        gl.glColorPointer(4, gl.GL_FLOAT, 0, 0)
 
     def normal(self):
-        glBindBuffer(GL_ARRAY_BUFFER, self.buffers["normal"])
-        glNormalPointer(GL_FLOAT, 0, 0)
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.buffers["normal"])
+        gl.glNormalPointer(gl.GL_FLOAT, 0, 0)
 
     def texture(self):
-        glBindBuffer(GL_ARRAY_BUFFER, self.buffers["texture_coords"])
-        glTexCoordPointer(3, GL_FLOAT, 0, 0)
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.buffers["texture_coords"])
+        gl.glTexCoordPointer(3, gl.GL_FLOAT, 0, 0)
 
     def draw(self):
         if self.buffers["vertex"] is not None:
-            glEnableClientState(GL_VERTEX_ARRAY)
+            gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
             self.vertex()
 
         if self.buffers["color"] is not None:
-            glEnableClientState(GL_COLOR_ARRAY)
+            gl.glEnableClientState(gl.GL_COLOR_ARRAY)
             self.color()
 
         if self.buffers["normal"] is not None:
-            glEnableClientState(GL_NORMAL_ARRAY)
+            gl.glEnableClientState(gl.GL_NORMAL_ARRAY)
             self.normal()
 
         if self.buffers["texture_coords"] is not None:
-            glEnableClientState(GL_TEXTURE_COORD_ARRAY)
-            glEnable(GL_TEXTURE_2D)
-            glBindTexture(texture.target, texture.id)
+            gl.glEnableClientState(gl.GL_TEXTURE_COORD_ARRAY)
+            gl.glEnable(gl.GL_TEXTURE_2D)
+            gl.glBindTexture(texture.target, texture.id)
             self.texture()
 
-        glDrawArrays(GL_QUADS, 0, self.vertex_count)
+        gl.glDrawArrays(gl.GL_QUADS, 0, self.vertex_count)
 
 
 # noinspection PyUnusedLocal
@@ -219,7 +246,8 @@ class Camera(object):
     world_pos = None
     current_chunk = (0, 0)
     current_tile = (0, y, 0)
-    modelview = None
+    inv_modelview = None
+    forward_vector = (0, 0, 1)
 
     last_pos = None
 
@@ -229,42 +257,30 @@ class Camera(object):
     holding_block = 1
 
     ui = VBO(size=1000)
-    text = pyglet.graphics.Batch()
-
-    last_chunk_written = current_chunk
-    last_tile_written = current_tile
-    last_world_pos_written = (0, y, 0)
-    last_rotation_written = (rx, ry)
-    last_velocity_written = (vx, vy, vz)
-
-    document = None
-    layout = None
-
-    document_offsets = {}
 
     def view(self, width, height):
         self.w, self.h = width, height
-        glViewport(0, 0, width, height)
+        gl.glViewport(0, 0, width, height)
         self.perspective()
 
     def perspective(self):
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        gluPerspective(self.fov, self.w / self.h, 0.1, self.far)
-        glMatrixMode(GL_MODELVIEW)
+        gl.glMatrixMode(gl.GL_PROJECTION)
+        gl.glLoadIdentity()
+        gl.gluPerspective(self.fov, self.w / self.h, 0.1, self.far)
+        gl.glMatrixMode(gl.GL_MODELVIEW)
 
     def ui_mode(self):
-        glDisable(GL_DEPTH_TEST)
-        glDisable(GL_CULL_FACE)
-        glDisable(GL_TEXTURE_2D)
-        glDisable(GL_LIGHTING)
+        gl.glDisable(gl.GL_DEPTH_TEST)
+        gl.glDisable(gl.GL_CULL_FACE)
+        gl.glDisable(gl.GL_TEXTURE_2D)
+        gl.glDisable(gl.GL_LIGHTING)
 
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        gluOrtho2D(-self.w / 2, self.w / 2, -self.h / 2, self.h / 2)
+        gl.glMatrixMode(gl.GL_PROJECTION)
+        gl.glLoadIdentity()
+        gl.gluOrtho2D(-self.w / 2, self.w / 2, -self.h / 2, self.h / 2)
 
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
+        gl.glMatrixMode(gl.GL_MODELVIEW)
+        gl.glLoadIdentity()
 
     def init_ui(self):
         self.ui.data("texture", texture, 0)
@@ -287,85 +303,6 @@ class Camera(object):
         self.ui.data("vertex", to_gl_float(vertices), 24)
         self.ui.data("color", to_gl_float(colors), 24)
         self.ui.data("texture_coords", to_gl_float(tex_coords), 24)
-
-    def init_text(self):
-        world_pos = (int(self.world_pos[0]), int(self.world_pos[1]), int(self.world_pos[2]))
-        rotation = (int(self.rx), int(self.ry))
-        velocity = (int(self.velocity[0]), int(self.velocity[1]), int(self.velocity[2]))
-
-        self.document = pyglet.text.decode_text("Chunk: " + str(self.current_chunk) + "\n")
-        self.document.insert_text(8 + len(str(self.current_chunk)), "Tile: " + str(self.current_tile) + "\n")
-        self.document.insert_text(16 + len(str(self.current_chunk)) + len(str(self.current_tile)),
-                                  "World Position: " + str(world_pos) + "\n\n")
-        self.document.insert_text(34 + len(str(self.current_chunk)) + len(str(self.current_tile)) + len(str(world_pos)),
-                                  "Rotation: " + str(rotation) + "\n")
-        self.document.insert_text(45 + len(str(self.current_chunk)) + len(str(self.current_tile)) + len(str(world_pos)) + len(str(rotation)),
-                                  "Velocity: " + str(velocity))
-
-        self.document.set_style(0, -1, dict(color=(255, 255, 255, 255)))
-
-        self.layout = pyglet.text.layout.TextLayout(self.document, width=300, height=300, multiline=True, batch=self.text)
-        self.layout.x = -(window_width / 2) + 50
-        self.layout.y = window_height / 4 - 120
-
-    def update_text_offsets(self):
-        elements_to_update = []
-        world_pos = (int(self.world_pos[0]), int(self.world_pos[1]), int(self.world_pos[2]))
-        rotation = (int(self.rx), int(self.ry))
-        velocity = (round(self.velocity[0], 3), round(self.velocity[1], 3), round(self.velocity[2], 3))
-
-        chunk_start = 7
-        tile_start = chunk_start + 7 + len(str(self.current_chunk))
-        world_pos_start = tile_start + 17 + len(str(self.current_tile))
-        rotation_start = world_pos_start + 11 + len(str(world_pos))
-        velocity_start = rotation_start + 11 + len(str(rotation))
-
-        self.document_offsets['chunk'] = [chunk_start,
-                                          chunk_start + len(str(self.last_chunk_written))]
-        self.document_offsets['tile'] = [tile_start,
-                                         tile_start + len(str(self.last_tile_written))]
-        self.document_offsets['world_pos'] = [world_pos_start,
-                                              world_pos_start + len(str(self.last_world_pos_written))]
-        self.document_offsets['rotation'] = [rotation_start,
-                                             rotation_start + len(str(self.last_rotation_written))]
-        self.document_offsets['velocity'] = [velocity_start,
-                                             velocity_start + len(str(self.last_velocity_written))]
-
-        if self.last_chunk_written != self.current_chunk:
-            self.last_chunk_written = self.current_chunk
-            elements_to_update.append(('chunk', str(self.current_chunk)))
-
-        if self.last_tile_written != self.current_tile:
-            self.last_tile_written = self.current_tile
-            elements_to_update.append(('tile', str(self.current_tile)))
-
-        if self.last_world_pos_written != world_pos:
-            self.last_world_pos_written = world_pos
-            elements_to_update.append(('world_pos', str(world_pos)))
-
-        if self.last_rotation_written != rotation:
-            self.last_rotation_written = rotation
-            elements_to_update.append(('rotation', str(rotation)))
-
-        if self.last_velocity_written != velocity:
-            self.last_velocity_written = velocity
-            elements_to_update.append(('velocity', str(velocity)))
-
-        return elements_to_update
-
-    def draw_text(self):
-        elements = self.update_text_offsets()
-
-        if len(elements) > 0:
-            self.layout.begin_update()
-
-            for element, value in elements:
-                self.document.delete_text(*self.document_offsets[element])
-                self.document.insert_text(self.document_offsets[element][0], value)
-
-            self.layout.end_update()
-
-        self.text.draw()
 
     def key_loop(self, dt):
         if keys[key.LSHIFT]:
@@ -438,6 +375,9 @@ class Camera(object):
             if button == 1:
                 chunks[hit[0]].remove_block(hit[1])
             elif button == 4 and len(hit) == 3:
+                if sounds.get(self.holding_block) is not None:
+                    play_sound(random.choice(sounds[self.holding_block]), get_world_pos(hit[2][0], hit[2][1]))
+
                 chunks[hit[2][0]].create_block(hit[2][1], new=self.holding_block)
 
     def mouse_drag(self, x, y, dx, dy, buttons, modifers):
@@ -465,17 +405,21 @@ class Camera(object):
 
     def get_world_pos(self):
         modelview = to_gl_float([0] * 16)
-        glGetFloatv(GL_MODELVIEW_MATRIX, modelview)
-        self.modelview = [[modelview[w + h * 4] for w in range(4)] for h in range(4)]
+        gl.glGetFloatv(gl.GL_MODELVIEW_MATRIX, modelview)
 
-        self.world_pos = numpy.dot([0, 0, 0, 1], numpy.linalg.inv(self.modelview))[:3]
+        modelview_list = [[modelview[w + h * 4] for w in range(4)] for h in range(4)]
+        self.inv_modelview = numpy.linalg.inv(modelview_list)
+
+        self.world_pos = self.inv_modelview[3][:3]
+        self.forward_vector = tuple(self.inv_modelview[2][:3])
+
         self.current_chunk, self.current_tile = get_chunk_pos(self.world_pos)
 
     def hitscan(self):
         last_pos = None
 
         for offset in numpy.arange(-1, -self.range, -0.1):
-            checking_pos = numpy.dot([0, 0, offset, 1], numpy.linalg.inv(self.modelview))
+            checking_pos = numpy.dot([0, 0, offset, 1], self.inv_modelview)
             checking_chunk, checking_tile = get_chunk_pos(checking_pos)
 
             sx, sy, sz = checking_tile
@@ -568,14 +512,17 @@ class Camera(object):
         self.y += self.vy * dt
         self.z += self.vz
 
+        listener.position = (self.x, self.y, self.z)
+        listener.orientation = self.forward_vector
+
         self.vx = 0
         self.vz = 0
 
     def apply(self):
-        glLoadIdentity()
-        glRotatef(-self.rx, 1, 0, 0)
-        glRotatef(-self.ry, 0, 1, 0)
-        glTranslatef(-self.x, -self.y, -self.z)
+        gl.glLoadIdentity()
+        gl.glRotatef(-self.rx, 1, 0, 0)
+        gl.glRotatef(-self.ry, 0, 1, 0)
+        gl.glTranslatef(-self.x, -self.y, -self.z)
 
 
 class Chunk:
@@ -591,6 +538,7 @@ class Chunk:
         self.offsets = numpy.zeros((chunk_size, chunk_height + height_offset, chunk_size), dtype=numpy.uint32)
 
         self.is_meshed = False
+        self.generated_ores = False
 
     def generate(self):
         for sx in range(chunk_size):
@@ -599,27 +547,59 @@ class Chunk:
             for sz in range(chunk_size):
                 z = sz + self.cz * chunk_size
 
-                noise_height = noise.snoise3(x / zoom, z / zoom, seed, octaves=3)
-                height = round((noise_height + 1) / 2 * chunk_height) + height_offset
-
+                height = round((noise.snoise3(x / zoom, z / zoom, seed, octaves=3) + 1) / 2 * chunk_height) + height_offset
                 block_id = None
 
-                if 0.66 <= noise_height <= 1.0:
+                if 114 <= height:
                     block_id = 1
 
-                elif -0.11 <= noise_height < 0.66:
+                elif 90 <= height < 114:
                     block_id = 2
 
-                elif -0.33 <= noise_height < -0.11:
+                elif 82 <= height < 90:
                     block_id = 3
 
-                elif -1.0 <= noise_height < -0.33:
+                elif height < 82:
                     block_id = 4
 
                 for y in range(height - 2, height + 1):
                     self.blocks.add((sx, y, sz))
 
-                self.block_map[sx, 0:height + 1, sz] = block_id
+                self.block_map[sx, height - 4:height + 1, sz] = block_id
+                self.block_map[sx, 0:height - 4, sz] = 5
+
+    def generate_ores(self):
+        density = numpy.zeros((chunk_size, height_offset, chunk_size), dtype=numpy.float32)
+        deposit_locations = [random_chunk_pos() for _ in range(20)]
+
+        for sx in range(chunk_size):
+            for sy in range(height_offset):
+                for sz in range(chunk_size):
+                    x = sx + self.cx * chunk_size
+                    z = sz + self.cz * chunk_size
+
+                    density.itemset((sx, sy, sz), noise.snoise3(x / 10, sy / 10, z / 10))
+
+        for pos in deposit_locations:
+            new_pos = pos
+            added_blocks = {new_pos}
+
+            for _ in range(6):
+                min_density = 1
+                min_density_block = None
+
+                for neighbor in self.get_neighbors(new_pos, inverse=False, local_chunk=True):
+                    if neighbor not in added_blocks and 0 <= neighbor[1] < 64:
+                        block_density = density.item(neighbor)
+
+                        if block_density < min_density:
+                            min_density = block_density
+                            min_density_block = neighbor
+
+                if min_density_block is not None:
+                    added_blocks.add(min_density_block)
+                    self.block_map.itemset(min_density_block, 6)
+                    new_pos = min_density_block
 
     def mesh(self):
         if not self.is_meshed:
@@ -630,6 +610,10 @@ class Chunk:
                     if chunk_pos != (self.cx, self.cz) and chunk_pos not in chunks:
                         chunks[chunk_pos] = Chunk(chunk_pos)
                         chunks[chunk_pos].generate()
+
+        if not self.generated_ores:
+            self.generated_ores = True
+            self.generate_ores()
 
         self.vbo.data("texture", texture, 0)
 
@@ -649,7 +633,7 @@ class Chunk:
         offset = self.offsets.item(tile)
 
         data = to_gl_float([0] * 4)
-        glGetBufferSubData(GL_ARRAY_BUFFER, offset * 16, 16, data)
+        gl.glGetBufferSubData(gl.GL_ARRAY_BUFFER, offset * 16, 16, data)
 
         return list(data)
 
@@ -659,7 +643,7 @@ class Chunk:
 
         self.vbo.data("color", [*color] * length, offset)
 
-    def get_neighbors(self, tile, get_faces=False, local_chunk=False):
+    def get_neighbors(self, tile, get_faces=False, inverse=False, local_chunk=False):
         x, y, z = tile
 
         neighbors = [
@@ -691,20 +675,29 @@ class Chunk:
             if local_chunk and (cx, cz) != (self.cx, self.cz):
                 continue
 
-            value = chunks[(cx, cz)].block_map.item((sx, sy, sz))
+            if inverse:
+                value = chunks[(cx, cz)].block_map.item((sx, sy, sz)) == 0
+            else:
+                value = chunks[(cx, cz)].block_map.item((sx, sy, sz)) > 0
 
             if get_faces:
-                if value > 0:
+                if value:
                     tile_neighbors.append(1)
                 else:
                     tile_neighbors.append(0)
             else:
-                if value > 0:
-                    tile_neighbors.append(((cx, cz), (sx, sy, sz)))
+                if value:
+                    if local_chunk:
+                        tile_neighbors.append((sx, sy, sz))
+                    else:
+                        tile_neighbors.append(((cx, cz), (sx, sy, sz)))
 
         return tile_neighbors
 
     def remove_block(self, tile):
+        if sounds.get(self.block_map.item(tile)) is not None:
+            play_sound(random.choice(sounds[self.block_map.item(tile)]), get_world_pos((self.cx, self.cz), tile))
+
         self.blocks.remove(tile)
         self.block_map.itemset(tile, 0)
         self.offsets.itemset(tile, 0)
@@ -720,7 +713,6 @@ class Chunk:
 
             if neighbor not in chunks[chunk].blocks:
                 chunks[chunk].blocks.add(neighbor)
-                chunks[chunk].block_map.itemset(neighbor, 2)
 
         self.mesh()
 
@@ -745,8 +737,7 @@ class Chunk:
             self.add_block(tile, external_data, new=new)
 
     def add_block(self, tile, data, new=None):
-        x = tile[0] + self.cx * chunk_size
-        z = tile[2] + self.cz * chunk_size
+        x, y, z = get_world_pos((self.cx, self.cz), tile)
 
         if new is not None:
             texture_id = new
@@ -772,7 +763,7 @@ class Chunk:
 
 # noinspection PyCallingNonCallable
 def to_gl_float(data):
-    return (GLfloat * len(data))(*data)
+    return (gl.GLfloat * len(data))(*data)
 
 
 def get_chunk_pos(pos):
@@ -782,15 +773,47 @@ def get_chunk_pos(pos):
     return chunk, tile
 
 
+def get_world_pos(chunk, tile):
+    return chunk[0] * chunk_size + tile[0], tile[1], chunk[1] * chunk_size + tile[2]
+
+
+def clamp(values):
+    return tuple([(x - min(values)) / (max(values) - min(values)) for x in values])
+
+
+def normalize(vector):
+    vector_length = math.sqrt(sum([v ** 2 for v in vector]))
+    return tuple([v / vector_length for v in vector])
+
+
+def random_chunk_pos(height=False):
+    return random.randrange(chunk_size), random.randrange(height if height else height_offset), random.randrange(chunk_size)
+
+
+def play_sound(file, pos):
+    sound = LoadSound(file)
+    player = SoundPlayer()
+
+    player.position = pos
+    player.loop = False
+    player.rolloff = 1
+
+    player.add(sound)
+    player.play()
+
+    Timer(sound.duration, clean_up_sound, [sound, player]).start()
+
+
+def clean_up_sound(sound, player):
+    player.stop()
+    player.delete()
+    sound.delete()
+
+
 def add_face(pos, face, texture_name, verts, cols, norms, texts, scale=(1.0, 1.0, 1.0)):
     x, y, z = pos
     w, h, d = scale
-    texture_position = texture_pos[texture_name]
-
-    texture_positions = [
-        [(texture_position[0] * 16) / texture.width, (texture_position[1] * 16) / texture.height],
-        [((texture_position[0] + 1) * 16) / texture.width, ((texture_position[1] + 1) * 16) / texture.height]
-    ]
+    texture_positions = texture_pos[texture_name]
 
     vertices = []
     colors = []
@@ -821,12 +844,7 @@ def add_rect(x, y, w, h, color, verts, cols, texts, image=None):
     cols.extend([*color] * 4)
 
     if image:
-        texture_position = texture_pos[image]
-
-        texture_positions = [
-            [(texture_position[0] * 16) / texture.width, (texture_position[1] * 16) / texture.height],
-            [((texture_position[0] + 1) * 16) / texture.width, ((texture_position[1] + 1) * 16) / texture.height]
-        ]
+        texture_positions = texture_pos[image]
 
         texts.extend([
             texture_positions[0][0], texture_positions[0][1], 0,
@@ -839,15 +857,15 @@ def add_rect(x, y, w, h, color, verts, cols, texts, image=None):
 
 
 def render_light(pos, direction, angle, attenuation=0):
-    glLightfv(GL_LIGHT0, GL_AMBIENT, to_gl_float((0.2, 0.2, 0.2, 1.0)))
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, to_gl_float((1.0, 1.0, 1.0, 1.0)))
-    glLightfv(GL_LIGHT0, GL_SPECULAR, to_gl_float((0.5, 0.5, 0.5, 1.0)))
+    gl.glLightfv(gl.GL_LIGHT0, gl.GL_AMBIENT, to_gl_float((0.2, 0.2, 0.2, 1.0)))
+    gl.glLightfv(gl.GL_LIGHT0, gl.GL_DIFFUSE, to_gl_float((1.0, 1.0, 1.0, 1.0)))
+    gl.glLightfv(gl.GL_LIGHT0, gl.GL_SPECULAR, to_gl_float((0.5, 0.5, 0.5, 1.0)))
 
-    glLightfv(GL_LIGHT0, GL_POSITION, to_gl_float((*pos, attenuation)))
-    glLightfv(GL_LIGHT0, GL_SPOT_CUTOFF, to_gl_float([angle]))
-    glLightfv(GL_LIGHT0, GL_SPOT_DIRECTION, to_gl_float(direction))
+    gl.glLightfv(gl.GL_LIGHT0, gl.GL_POSITION, to_gl_float((*pos, attenuation)))
+    gl.glLightfv(gl.GL_LIGHT0, gl.GL_SPOT_CUTOFF, to_gl_float([angle]))
+    gl.glLightfv(gl.GL_LIGHT0, gl.GL_SPOT_DIRECTION, to_gl_float(direction))
 
-    glEnable(GL_LIGHT0)
+    gl.glEnable(gl.GL_LIGHT0)
 
 
 def check_draw_distance(chunk):
@@ -888,24 +906,23 @@ class CameraWindow(pyglet.window.Window):
 
         self.cam.update(0.0)
         self.cam.init_ui()
-        self.cam.init_text()
 
         pyglet.clock.schedule_interval(self.cam.update, 1 / 60)
 
     def on_draw(self):
-        glClearColor(0.5, 0.69, 1.0, 1.0)
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        gl.glClearColor(0.5, 0.69, 1.0, 1.0)
+        gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
         self.cam.apply()
 
-        glEnable(GL_DEPTH_TEST)
-        glEnable(GL_LIGHTING)
-        glEnable(GL_CULL_FACE)
+        gl.glEnable(gl.GL_DEPTH_TEST)
+        gl.glEnable(gl.GL_LIGHTING)
+        gl.glEnable(gl.GL_CULL_FACE)
 
         render_light((0, 100, 0), (0.4, -0.824, 0.4), 45)
 
-        glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE)
-        glEnable(GL_COLOR_MATERIAL)
+        gl.glColorMaterial(gl.GL_FRONT, gl.GL_AMBIENT_AND_DIFFUSE)
+        gl.glEnable(gl.GL_COLOR_MATERIAL)
 
         check_draw_distance(self.cam.current_chunk)
 
@@ -915,7 +932,6 @@ class CameraWindow(pyglet.window.Window):
         self.cam.ui_mode()
 
         self.cam.ui.draw()
-        self.cam.draw_text()
 
         self.cam.perspective()
         self.cam.apply()
