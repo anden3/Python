@@ -2,7 +2,6 @@ import math
 import os
 import random
 import threading
-from ctypes import *
 
 import noise
 import numpy
@@ -113,8 +112,9 @@ def init():
             [(texture_region.x + 16) / atlas_width, (texture_region.y + 16) / atlas_height]
         ]
 
-    global texture
+    global texture, texture_data
     texture = texture_atlas.texture
+    texture_data = texture.get_image_data().get_data("RGB", texture.width * 3)
 
     gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_REPEAT)
     gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_REPEAT)
@@ -143,8 +143,11 @@ def init():
     for sx in range(chunk_size):
         for sy in range(height_offset):
             for sz in range(chunk_size):
-
                 chunk_density.itemset((sx, sy, sz), noise.snoise3(sx / 10, sy / 10, sz / 10))
+
+    chunks[(0, 0)] = Chunk((0, 0))
+    chunks[(0, 0)].generate()
+    chunks[(0, 0)].mesh()
 
     pyglet.app.run()
 
@@ -185,7 +188,8 @@ class VBO:
                 offset *= 12
 
             gl_data = to_gl_float(data)
-            gl.glBufferSubData(gl.GL_ARRAY_BUFFER, offset, sizeof(gl_data), gl_data)
+            length = len(data) * 4
+            gl.glBufferSubData(gl.GL_ARRAY_BUFFER, offset, length, gl_data)
 
             if buffer_type == "vertex":
                 self.vertex_count += int(len(data) / 3)
@@ -196,7 +200,7 @@ class VBO:
             gl.glBindTexture(data.target, data.id)
 
             gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGB, texture.width, texture.height, 0, gl.GL_RGB, gl.GL_UNSIGNED_BYTE,
-                            data.get_image_data().get_data("RGB", texture.width * 3))
+                            texture_data)
             gl.glTexParameterf(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
 
     def vertex(self):
@@ -297,9 +301,9 @@ class Camera(object):
 
         vertices, colors, tex_coords = [], [], []
 
-        add_rect(704, 449, 32, 2, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords)
-        add_rect(719, 434, 2, 32, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords)
-        add_rect(704, 200, 32, 32, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords, image=self.holding_block)
+        add_rect(window_width / 2 - 16, window_height / 2 - 1, 32, 2, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords)
+        add_rect(window_width / 2 - 1, window_height / 2 - 16, 2, 32, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords)
+        add_rect(window_width / 2 - 16, 200, 32, 32, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords, image=self.holding_block)
 
         self.ui.data("vertex", to_gl_float(vertices), 0)
         self.ui.data("color", to_gl_float(colors), 0)
@@ -372,7 +376,7 @@ class Camera(object):
             self.update_ui()
 
         elif symbol == key.ESCAPE:
-            time.get("all")
+            time.get(get_type="all")
 
             get_function_avg()
 
@@ -590,7 +594,7 @@ class Chunk:
                 min_density = 1
                 min_density_block = None
 
-                for neighbor in self.get_neighbors(new_pos, inverse=False, local_chunk=True):
+                for neighbor in self.get_neighbors(new_pos, local_chunk=True):
                     if neighbor not in added_blocks and 0 <= neighbor[1] < chunk_height:
                         block_density = chunk_density.item(neighbor)
 
@@ -645,7 +649,7 @@ class Chunk:
 
         self.vbo.data("color", [*color] * length, offset)
 
-    def get_neighbors(self, tile, get_faces=False, inverse=False, local_chunk=False):
+    def get_neighbors(self, tile, get_faces=False, local_chunk=False):
         x, y, z = tile
 
         neighbors = [
@@ -677,10 +681,7 @@ class Chunk:
             if local_chunk and (cx, cz) != (self.cx, self.cz):
                 continue
 
-            if inverse:
-                value = chunks[(cx, cz)].block_map.item((sx, sy, sz)) == 0
-            else:
-                value = chunks[(cx, cz)].block_map.item((sx, sy, sz)) > 0
+            value = chunks[(cx, cz)].block_map.item((sx, sy, sz)) > 0
 
             if get_faces:
                 if value:
@@ -880,7 +881,7 @@ def check_draw_distance(chunk):
             if pos not in chunks:
                 chunks[pos] = Chunk(pos)
                 chunks[pos].generate()
-                threading.Thread(target=chunks[pos].mesh()).start()
+                chunks[pos].mesh()
 
             elif not chunks[pos].is_meshed:
                 threading.Thread(target=chunks[pos].mesh()).start()
@@ -890,7 +891,7 @@ def check_draw_distance(chunk):
 
 class CameraWindow(pyglet.window.Window):
     def __init__(self):
-        super(CameraWindow, self).__init__(resizable=True)
+        super(CameraWindow, self).__init__(resizable=True, vsync=True)
         self.maximize()
         self.set_fullscreen()
 

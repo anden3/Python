@@ -36,13 +36,26 @@ class Time:
         else:
             self.t0[name] = t
 
-    def get(self, get_type="last", name=0):
+    def stop(self, name=0):
+        if name not in self.timings:
+            raise KeyError("Name not defined")
+
+        self.t0[name] = 0
+
+    def remove(self, name=0):
+        if name not in self.timings:
+            raise KeyError("Name not defined")
+
+        self.timings[name].pop(self.count[name])
+        self.count[name] -= 1
+
+    def get(self, name=0, get_type="last"):
         if get_type == "all":
-            for time_name in self.timings:
-                self.get(get_type="average", name=time_name)
-                self.get(get_type="max", name=time_name)
-                self.get(get_type="min", name=time_name)
-                self.get(get_type="sum", name=time_name)
+            for name, time in sorted(self.timings.items(), key=lambda x: sum(x[1].values()), reverse=True):
+                self.get(get_type="average", name=name)
+                self.get(get_type="max", name=name)
+                self.get(get_type="min", name=name)
+                self.get(get_type="sum", name=name)
             return
 
         if name not in self.timings:
