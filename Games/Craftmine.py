@@ -258,6 +258,8 @@ class Camera(object):
     far = 8192
     fov = 90
 
+    width, depth = 0.2, 0.2
+
     vx, vy, vz = 0, 0, 0
     velocity = (0, 0, 0)
 
@@ -455,19 +457,69 @@ class Camera(object):
 
             last_pos = checking_pos
 
-    def check_player_col(self, tile=None, chunk=None):
-        if tile is None:
-            tile = self.current_tile
+    def get_bounding_box(self, dt):
+        x = self.x + self.vx
+        y = self.y
+        z = self.z + self.vz
 
-        if chunk is None:
-            chunk = self.current_chunk
+        points = [
+            # Lower Left-Right
+            (x - self.width / 2, y - 1, z),
+            (x + self.width / 2, y - 1, z),
 
-        roof_colliding = chunks[chunk].block_map[tile[0]][int(self.y) + 1][tile[2]] > 0
-        head_colliding = chunks[chunk].block_map[tile[0]][int(self.y)][tile[2]] > 0
-        body_colliding = chunks[chunk].block_map[tile[0]][int(self.y) - 1][tile[2]] > 0
-        ground_colliding = chunks[chunk].block_map[tile[0]][int(self.y) - 2][tile[2]] > 0
+            # Upper Left-Right
+            (x - self.width / 2, y, z),
+            (x + self.width / 2, y, z),
 
-        return roof_colliding, head_colliding, body_colliding, ground_colliding
+            # Lower Back-Front
+            (x, y - 1, z - self.depth / 2),
+            (x, y - 1, z + self.depth / 2),
+
+            # Upper Back-Front
+            (x, y, z - self.depth / 2),
+            (x, y, z + self.depth / 2),
+
+            # Down-Up
+            (x, y - 1.7, z),
+            (x, y + 0.7, z)
+        ]
+
+        hits = []
+
+        for i, corner in enumerate(points):
+            chunk, pos = get_chunk_pos(corner)
+
+            if chunks[chunk].block_map.item(pos) > 0:
+                if (i == 0 or i == 2) and self.vx < 0:      # Left
+                    self.vx = 0
+
+                elif (i == 1 or i == 3) and self.vx > 0:    # Right
+                    self.vx = 0
+
+                elif (i == 4 or i == 6) and self.vz < 0:    # Back
+                    self.vz = 0
+
+                elif (i == 5 or i == 7) and self.vz > 0:    # Front
+                    self.vz = 0
+
+                elif i == 8:                                # Down
+                    if self.vy < 0:
+                        self.vy = 0
+
+                    self.jumping = False
+
+                    if keys[key.SPACE]:
+                        self.vy += self.jump_height
+                        self.jumping = True
+
+                    if self.vy > self.jump_height:
+                        self.vy = self.jump_height
+
+                elif i == 9 and self.vy > 0:                # Up
+                    self.vy = 0
+            else:
+                if i == 8:
+                    self.vy -= 9.82 * dt
 
     def update(self, dt):
         self.get_world_pos()
@@ -481,46 +533,8 @@ class Camera(object):
             pass
 
         if not self.flying and self.current_chunk in active_chunks:
-            if 2 <= self.y < chunk_height + height_offset:
-                new_chunk, new_tile = get_chunk_pos((self.world_pos[0] + self.vx,
-                                                     self.world_pos[1] + self.vy * dt,
-                                                     self.world_pos[2] + self.vz))
-                roof_col, head_col, body_col, ground_col = self.check_player_col(tile=new_tile, chunk=new_chunk)
-
-                if not head_col and not body_col:
-                    if ground_col:
-                        self.vy = 0
-                        self.jumping = False
-
-                        if keys[key.SPACE]:
-                            self.vy += self.jump_height
-                            self.jumping = True
-                        else:
-                            if self.y - (int(self.y) + 0.7) >= 0.05:
-                                self.vy -= 100 * dt
-                    else:
-                        self.vy -= 9.82 * dt
-
-                elif body_col or head_col:
-                    if body_col and head_col:
-                        self.vy = 0
-
-                    dx = abs(new_tile[0] - self.current_tile[0])
-                    dz = abs(new_tile[2] - self.current_tile[2])
-
-                    if dx != 0:
-                        self.vx = 0
-
-                    if dz != 0:
-                        self.vz = 0
-
-                    if not self.jumping and keys[key.SPACE]:
-                        self.jumping = True
-                        self.vy += self.jump_height
-
-                if roof_col:
-                    if self.vy > 0:
-                        self.vy = 0
+            if 2 <= self.y < chunk_height + height_offset - 1:
+                self.get_bounding_box(dt)
             else:
                 self.vy -= 9.82 * dt
         else:
