@@ -322,11 +322,11 @@ class Camera(object):
     def update_ui(self):
         vertices, colors, tex_coords = [], [], []
 
-        add_rect(704, 200, 32, 32, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords, image=self.holding_block)
+        add_rect(window_width / 2 - 16, 200, 32, 32, (1.0, 1.0, 1.0, 1.0), vertices, colors, tex_coords, image=self.holding_block)
 
-        self.ui.data("vertex", to_gl_float(vertices), 24)
-        self.ui.data("color", to_gl_float(colors), 24)
-        self.ui.data("texture_coords", to_gl_float(tex_coords), 24)
+        self.ui.data("vertex", to_gl_float(vertices), 8)
+        self.ui.data("color", to_gl_float(colors), 8)
+        self.ui.data("texture_coords", to_gl_float(tex_coords), 8)
 
     def key_loop(self, dt):
         if keys[key.LSHIFT]:
