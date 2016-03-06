@@ -56,6 +56,7 @@ class Time:
                 self.get(get_type="max", name=name)
                 self.get(get_type="min", name=name)
                 self.get(get_type="sum", name=name)
+                self.get(get_type="loops", name=name)
             return
 
         if name not in self.timings:
@@ -75,6 +76,10 @@ class Time:
                     print_converted(max(self.timings[name].values()), str(name) + " Max")
                 elif get_type == "sum":
                     print_converted(sum(self.timings[name].values()), str(name) + " Sum")
+                elif get_type == "loops":
+                    desc = "Times Looped (" + str(name) + "):"
+                    desc += ''.join(['\t'] * ceil((spacing - len(desc)) / 4))
+                    print(desc, len(self.timings[name]))
 
             elif get_type == "last":
                 print_converted(self.timings[name][self.count[name]], str(name) + " Loop " + str(self.count[name]))

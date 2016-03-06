@@ -71,6 +71,20 @@ texture_coords = [
 def init():
     config_time(silent=True)
 
+    init_gl()
+    init_textures()
+    init_sounds()
+    init_terrain()
+
+    global window, keys
+    window = CameraWindow()
+    keys = key.KeyStateHandler()
+    window.push_handlers(keys)
+
+    pyglet.app.run()
+
+
+def init_gl():
     gl.glClearDepth(1.0)
 
     gl.glEnable(gl.GL_BLEND)
@@ -82,11 +96,15 @@ def init():
     gl.glShadeModel(gl.GL_SMOOTH)
     gl.glHint(gl.GL_PERSPECTIVE_CORRECTION_HINT, gl.GL_NICEST)
 
-    images = []
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_REPEAT)
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_REPEAT)
 
-    for file in os.listdir('images'):
-        if file.endswith('.png'):
-            images.append(pyglet.image.load('images/' + file).get_image_data())
+
+def init_textures():
+    global texture_pos, texture, texture_data
+
+    images = [pyglet.image.load('images/' + file).get_image_data() for file in os.listdir('images')
+              if file.endswith('.png')]
 
     area = len(images) * 256
     area_root = math.sqrt(area)
@@ -102,7 +120,6 @@ def init():
 
     texture_atlas = pyglet.image.atlas.TextureAtlas(width=atlas_width, height=atlas_height)
 
-    global texture_pos
     texture_pos = {}
 
     for i, image in enumerate(images):
@@ -112,14 +129,12 @@ def init():
             [(texture_region.x + 16) / atlas_width, (texture_region.y + 16) / atlas_height]
         ]
 
-    global texture, texture_data
     texture = texture_atlas.texture
     texture_data = texture.get_image_data().get_data("RGB", texture.width * 3)
 
-    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_REPEAT)
-    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_REPEAT)
 
-    global sounds
+def init_sounds():
+    global sounds, listener
     sounds = {}
 
     for file in os.listdir("sounds"):
@@ -129,14 +144,10 @@ def init():
             else:
                 sounds[int(file[:1])].append("sounds/" + file)
 
-    global listener
     listener = Listener()
 
-    global window, keys
-    window = CameraWindow()
-    keys = key.KeyStateHandler()
-    window.push_handlers(keys)
 
+def init_terrain():
     global chunk_density
     chunk_density = numpy.zeros((chunk_size, height_offset, chunk_size), dtype=numpy.float32)
 
@@ -148,8 +159,6 @@ def init():
     chunks[(0, 0)] = Chunk((0, 0))
     chunks[(0, 0)].generate()
     chunks[(0, 0)].mesh()
-
-    pyglet.app.run()
 
 
 class VBO:
@@ -250,20 +259,19 @@ class Camera(object):
     fov = 90
 
     vx, vy, vz = 0, 0, 0
+    velocity = (0, 0, 0)
 
     speed_mult = 5
     jump_height = 5
     camera_height = 1.7
     range = 5
-    velocity = (0, 0, 0)
 
     world_pos = None
     current_chunk = (0, 0)
     current_tile = (0, y, 0)
+
     inv_modelview = None
     forward_vector = (0, 0, 1)
-
-    last_pos = None
 
     flying = False
     jumping = False
@@ -480,8 +488,6 @@ class Camera(object):
                 roof_col, head_col, body_col, ground_col = self.check_player_col(tile=new_tile, chunk=new_chunk)
 
                 if not head_col and not body_col:
-                    self.last_pos = self.world_pos
-
                     if ground_col:
                         self.vy = 0
                         self.jumping = False
@@ -650,7 +656,8 @@ class Chunk:
         self.vbo.data("color", [*color] * length, offset)
 
     def get_neighbors(self, tile, get_faces=False, local_chunk=False):
-        x, y, z = tile
+
+        x, y, z = get_world_pos((self.cx, self.cz), tile)
 
         neighbors = [
             (x - 1, y, z), (x + 1, y, z),
@@ -661,39 +668,18 @@ class Chunk:
         tile_neighbors = []
 
         for neighbor in neighbors:
-            sx, sy, sz = neighbor
-            cx, cz = self.cx, self.cz
+            chunk, tile = get_chunk_pos(neighbor)
 
-            if sx < 0:
-                sx += 16
-                cx -= 1
-            elif sx > 15:
-                sx -= 16
-                cx += 1
-
-            if sz < 0:
-                sz += 16
-                cz -= 1
-            elif sz > 15:
-                sz -= 16
-                cz += 1
-
-            if local_chunk and (cx, cz) != (self.cx, self.cz):
+            if local_chunk and chunk != (self.cx, self.cz):
                 continue
 
-            value = chunks[(cx, cz)].block_map.item((sx, sy, sz)) > 0
+            value = chunks[chunk].block_map.item(tile) > 0
 
             if get_faces:
-                if value:
-                    tile_neighbors.append(1)
-                else:
-                    tile_neighbors.append(0)
+                tile_neighbors.append(1 if value else 0)
             else:
                 if value:
-                    if local_chunk:
-                        tile_neighbors.append((sx, sy, sz))
-                    else:
-                        tile_neighbors.append(((cx, cz), (sx, sy, sz)))
+                    tile_neighbors.append(tile if local_chunk else (chunk, tile))
 
         return tile_neighbors
 
@@ -728,36 +714,33 @@ class Chunk:
     def create_block(self, tile, new=None, external_data=None):
         data_names = ["vertex", "color", "normal", "texture_coords"]
 
+        if new:
+            self.blocks.add(tile)
+            self.block_map.itemset(tile, new)
+
         if external_data is None:
             data = ([], [], [], [])
 
-            if self.add_block(tile, data, new=new):
+            if self.add_block(tile, data):
                 offset = self.offsets.item(tile)
 
                 for i, data_list in enumerate(data):
                     self.vbo.data(data_names[i], data_list, offset)
         else:
-            self.add_block(tile, external_data, new=new)
+            self.add_block(tile, external_data)
 
-    def add_block(self, tile, data, new=None):
+    def add_block(self, tile, data):
         x, y, z = get_world_pos((self.cx, self.cz), tile)
-
-        if new is not None:
-            texture_id = new
-            self.blocks.add(tile)
-            self.block_map.itemset(tile, texture_id)
-        else:
-            texture_id = self.block_map.item(tile)
 
         neighbors = self.get_neighbors(tile, get_faces=True)
 
-        if sum(neighbors) == 6 or sum(neighbors) == 0:
+        if sum(neighbors) == 6:
             self.blocks.remove(tile)
             return False
 
         for i, face in enumerate(neighbors):
             if face == 0:
-                add_face((x, tile[1], z), i, texture_id, *data)
+                add_face((x, tile[1], z), i, self.block_map.item(tile), *data)
 
         self.offsets.itemset(tile, self.offset)
         self.offset += (6 - sum(neighbors)) * 4
@@ -884,7 +867,7 @@ def check_draw_distance(chunk):
                 chunks[pos].mesh()
 
             elif not chunks[pos].is_meshed:
-                threading.Thread(target=chunks[pos].mesh()).start()
+                chunks[pos].mesh()
 
             active_chunks.add(pos)
 
