@@ -1,8 +1,8 @@
 import math
 import os
 import random
+import threading
 from ctypes import *
-from threading import Timer
 
 import noise
 import numpy
@@ -38,6 +38,7 @@ texture_color = {
     4: (0.0, 0.0, 0.5, 1.0),    # Blue Wool
     5: (0.4, 0.4, 0.4, 1.0),    # Stone
     6: (0.4, 0.4, 0.4, 1.0),    # Iron Ore
+    7: (0.4, 0.4, 0.4, 1.0),    # Bedrock
 }
 
 cube_signs = [
@@ -135,6 +136,15 @@ def init():
     window = CameraWindow()
     keys = key.KeyStateHandler()
     window.push_handlers(keys)
+
+    global chunk_density
+    chunk_density = numpy.zeros((chunk_size, height_offset, chunk_size), dtype=numpy.float32)
+
+    for sx in range(chunk_size):
+        for sy in range(height_offset):
+            for sz in range(chunk_size):
+
+                chunk_density.itemset((sx, sy, sz), noise.snoise3(sx / 10, sy / 10, sz / 10))
 
     pyglet.app.run()
 
@@ -418,7 +428,7 @@ class Camera(object):
     def hitscan(self):
         last_pos = None
 
-        for offset in numpy.arange(-1, -self.range, -0.1):
+        for offset in numpy.arange(0, -self.range, -0.1):
             checking_pos = numpy.dot([0, 0, offset, 1], self.inv_modelview)
             checking_chunk, checking_tile = get_chunk_pos(checking_pos)
 
@@ -566,19 +576,11 @@ class Chunk:
                     self.blocks.add((sx, y, sz))
 
                 self.block_map[sx, height - 4:height + 1, sz] = block_id
-                self.block_map[sx, 0:height - 4, sz] = 5
+                self.block_map[sx, 1:height - 4, sz] = 5
+                self.block_map[sx, 0, sz] = 7
 
     def generate_ores(self):
-        density = numpy.zeros((chunk_size, height_offset, chunk_size), dtype=numpy.float32)
         deposit_locations = [random_chunk_pos() for _ in range(20)]
-
-        for sx in range(chunk_size):
-            for sy in range(height_offset):
-                for sz in range(chunk_size):
-                    x = sx + self.cx * chunk_size
-                    z = sz + self.cz * chunk_size
-
-                    density.itemset((sx, sy, sz), noise.snoise3(x / 10, sy / 10, z / 10))
 
         for pos in deposit_locations:
             new_pos = pos
@@ -589,8 +591,8 @@ class Chunk:
                 min_density_block = None
 
                 for neighbor in self.get_neighbors(new_pos, inverse=False, local_chunk=True):
-                    if neighbor not in added_blocks and 0 <= neighbor[1] < 64:
-                        block_density = density.item(neighbor)
+                    if neighbor not in added_blocks and 0 <= neighbor[1] < chunk_height:
+                        block_density = chunk_density.item(neighbor)
 
                         if block_density < min_density:
                             min_density = block_density
@@ -801,7 +803,7 @@ def play_sound(file, pos):
     player.add(sound)
     player.play()
 
-    Timer(sound.duration, clean_up_sound, [sound, player]).start()
+    threading.Timer(sound.duration, clean_up_sound, [sound, player]).start()
 
 
 def clean_up_sound(sound, player):
@@ -878,10 +880,10 @@ def check_draw_distance(chunk):
             if pos not in chunks:
                 chunks[pos] = Chunk(pos)
                 chunks[pos].generate()
-                chunks[pos].mesh()
+                threading.Thread(target=chunks[pos].mesh()).start()
 
             elif not chunks[pos].is_meshed:
-                chunks[pos].mesh()
+                threading.Thread(target=chunks[pos].mesh()).start()
 
             active_chunks.add(pos)
 
