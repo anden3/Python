@@ -17,12 +17,11 @@ class Listener(object):
         x, y, z = map(int, pos)
         al.alListener3f(al.AL_POSITION, x, y, z)
 
-    def _set_orientation(self, ori):
-        self._orientation = ori
-        ori_array = [*ori, 0, 1, 0]
+    def _set_orientation(self, orientation):
+        self._orientation = orientation
 
         # noinspection PyCallingNonCallable
-        al_data = (al.ALfloat(0) * 6)(*ori_array)
+        al_data = (al.ALfloat * 6)(*orientation)
         al.alListenerfv(al.AL_ORIENTATION, al_data)
 
     def delete(self):
@@ -30,6 +29,7 @@ class Listener(object):
         alc.alcCloseDevice(self.device)
 
     position = property(None, _set_position)
+    orientation = property(None, _set_orientation)
 
 
 class LoadSound(object):
