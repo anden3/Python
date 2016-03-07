@@ -16,11 +16,12 @@ time = Time()
 
 chunks = {}
 active_chunks = set()
+meshing_list = set()
 
 chunk_size = 16
 chunk_height = 64
 height_offset = 64
-render_distance = 5
+render_distance = 7
 
 window_width, window_height = 0, 0
 
@@ -46,15 +47,6 @@ cube_normals = [
     (0.0, 1.0, 0.0),
     (0.0, 0.0, -1.0),
     (0.0, 0.0, 1.0)
-]
-
-texture_coords = [
-    [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)],   # Left
-    [(1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 0)],   # Right
-    [(1, 1, 0), (0, 1, 0), (0, 0, 0), (1, 0, 0)],   # Bottom
-    [(0, 1, 0), (0, 0, 0), (1, 0, 0), (1, 1, 0)],   # Top
-    [(0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)],   # Front
-    [(1, 0, 0), (0, 0, 0), (0, 1, 0), (1, 1, 0)]    # Back
 ]
 
 
@@ -256,7 +248,7 @@ class Camera(object):
     velocity = (0, 0, 0)
 
     speed_mult = 5
-    jump_height = 5
+    jump_height = 4
     camera_height = 1.7
     range = 5
 
@@ -549,21 +541,6 @@ class Chunk:
         self.is_meshed = False
         self.generated_ores = False
 
-        self.should_generate = False
-        self.should_mesh = False
-
-        pyglet.clock.schedule_interval(self.update, 1)
-
-    # noinspection PyUnusedLocal
-    def update(self, dt):
-        if self.should_generate:
-            self.generate()
-            self.should_generate = False
-
-        if self.should_mesh:
-            self.mesh()
-            self.should_mesh = False
-
     def generate(self):
         for sx in range(chunk_size):
             x = sx + self.cx * chunk_size
@@ -589,7 +566,12 @@ class Chunk:
                 for y in range(height - 1, height + 1):
                     self.blocks.add((sx, y, sz))
 
-                self.block_map[sx, height - 4:height + 1, sz] = block_id
+                if block_id == 2:
+                    self.block_map[sx, height, sz] = 2
+                    self.block_map[sx, height - 4:height, sz] = 8
+                else:
+                    self.block_map[sx, height - 4:height + 1, sz] = block_id
+
                 self.block_map[sx, 1:height - 4, sz] = 5
                 self.block_map[sx, 0, sz] = 7
 
@@ -787,10 +769,10 @@ def add_face(pos, face, texture_name, verts, norms, texts, scale=(1.0, 1.0, 1.0)
     normals = []
     tex_coords = []
 
-    for tx, ty, tz in texture_coords[face]:
-        tex_coords.append(texture_positions[tx][0])
+    for tx, ty, tz in [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]:
+        tex_coords.append(texture_positions[tx][0] * w)
         tex_coords.append(texture_positions[ty][1] * h)
-        tex_coords.append(tz)
+        tex_coords.append(0)
 
     for i, (sx, sy, sz) in enumerate(cube_signs[face]):
         vertices.extend([x + (w * sx), y + (h * sy), z + (d * sz)])
@@ -837,19 +819,18 @@ def check_draw_distance(chunk):
     for cx in range(chunk[0] - render_distance, chunk[0] + render_distance + 1):
         for cz in range(chunk[1] - render_distance, chunk[1] + render_distance + 1):
             pos = (cx, cz)
+            dist = (chunk[0] - cx) ** 2 + (chunk[1] - cz) ** 2
 
-            if pos not in chunks:
-                chunks[pos] = Chunk(pos)
-                chunks[pos].should_generate = True
-                chunks[pos].should_mesh = True
-                # chunks[pos].generate()
-                # chunks[pos].mesh()
+            if dist <= render_distance ** 2:
+                if pos not in chunks:
+                    chunks[pos] = Chunk(pos)
+                    chunks[pos].generate()
+                    meshing_list.add(pos)
 
-            elif not chunks[pos].is_meshed:
-                # chunks[pos].mesh()
-                chunks[pos].should_mesh = True
+                elif not chunks[pos].is_meshed:
+                    meshing_list.add(pos)
 
-            active_chunks.add(pos)
+                active_chunks.add(pos)
 
 
 class CameraWindow(pyglet.window.Window):
@@ -890,6 +871,10 @@ class CameraWindow(pyglet.window.Window):
         gl.glMaterialfv(gl.GL_FRONT, gl.GL_AMBIENT_AND_DIFFUSE, to_gl_float([0.7, 0.7, 0.7, 1.0]))
 
         check_draw_distance(self.cam.current_chunk)
+
+        if len(meshing_list) > 0:
+            chunk = meshing_list.pop()
+            chunks[chunk].mesh()
 
         for chunk in active_chunks:
             chunks[chunk].vbo.draw()
