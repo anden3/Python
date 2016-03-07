@@ -16,7 +16,7 @@ time = Time()
 
 chunks = {}
 active_chunks = set()
-meshing_list = set()
+meshing_list = []
 
 chunk_size = 16
 chunk_height = 64
@@ -816,26 +816,32 @@ def render_light(pos, attenuation=0):
 def check_draw_distance(chunk):
     active_chunks.clear()
 
+    new_chunks = []
+
     for cx in range(chunk[0] - render_distance, chunk[0] + render_distance + 1):
         for cz in range(chunk[1] - render_distance, chunk[1] + render_distance + 1):
             pos = (cx, cz)
             dist = (chunk[0] - cx) ** 2 + (chunk[1] - cz) ** 2
 
             if dist <= render_distance ** 2:
-                if pos not in chunks:
-                    chunks[pos] = Chunk(pos)
-                    chunks[pos].generate()
-                    meshing_list.add(pos)
+                if pos not in meshing_list:
+                    if pos not in chunks:
+                        chunks[pos] = Chunk(pos)
+                        chunks[pos].generate()
+                        new_chunks.append((pos, dist))
 
-                elif not chunks[pos].is_meshed:
-                    meshing_list.add(pos)
+                    elif not chunks[pos].is_meshed:
+                        new_chunks.append((pos, dist))
 
                 active_chunks.add(pos)
+
+    if len(new_chunks) > 0:
+        meshing_list.extend([c for c, d in sorted(new_chunks, key=lambda x: x[1])])
 
 
 class CameraWindow(pyglet.window.Window):
     def __init__(self):
-        super(CameraWindow, self).__init__(resizable=True, vsync=True)
+        super(CameraWindow, self).__init__(resizable=True, vsync=False)
         self.maximize()
         self.set_fullscreen()
 
@@ -873,8 +879,7 @@ class CameraWindow(pyglet.window.Window):
         check_draw_distance(self.cam.current_chunk)
 
         if len(meshing_list) > 0:
-            chunk = meshing_list.pop()
-            chunks[chunk].mesh()
+            chunks[meshing_list.pop(0)].mesh()
 
         for chunk in active_chunks:
             chunks[chunk].vbo.draw()
