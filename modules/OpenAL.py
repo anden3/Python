@@ -137,6 +137,9 @@ class SoundPlayer(object):
         al.alSourcePause(self.source)
 
     def delete(self):
+        if self.playing():
+            self.stop()
+
         al.alDeleteSources(1, self.source)
 
     rolloff = property(None, _set_rolloff)

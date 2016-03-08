@@ -1,7 +1,9 @@
+import io
 import math
 import os
 import random
 import threading
+import zipfile
 
 import noise
 import numpy
@@ -49,6 +51,13 @@ cube_normals = [
     (0.0, 0.0, 1.0)
 ]
 
+block_sounds = {
+    1: 'snow',
+    2: 'dirt', 8: 'dirt',
+    3: 'sand',
+    5: 'stone', 6: 'stone', 7: 'stone'
+}
+
 
 def init():
     config_time(silent=True)
@@ -85,8 +94,9 @@ def init_gl():
 def init_textures():
     global texture_pos, texture, texture_data
 
-    images = [pyglet.image.load('images/' + file).get_image_data() for file in os.listdir('images')
-              if file.endswith('.png')]
+    image_archive = zipfile.ZipFile('images.zip')
+    images = [pyglet.image.load(file, file=io.BytesIO(image_archive.read(file))).get_image_data() for file in image_archive.namelist()]
+    image_archive.close()
 
     area = len(images) * 256
     area_root = math.sqrt(area)
@@ -101,7 +111,6 @@ def init_textures():
         atlas_width, atlas_height = int(area_root), int(area_root)
 
     texture_atlas = pyglet.image.atlas.TextureAtlas(width=atlas_width, height=atlas_height)
-
     texture_pos = {}
 
     for i, image in enumerate(images):
@@ -121,10 +130,12 @@ def init_sounds():
 
     for file in os.listdir("sounds"):
         if file.endswith(".wav"):
-            if int(file[:1]) not in sounds:
-                sounds[int(file[:1])] = ["sounds/" + file]
+            sound_type = file[:-6]
+
+            if sound_type not in sounds:
+                sounds[sound_type] = ["sounds/" + file]
             else:
-                sounds[int(file[:1])].append("sounds/" + file)
+                sounds[sound_type].append("sounds/" + file)
 
     listener = Listener()
 
@@ -186,8 +197,8 @@ class VBO:
                 self.vertex_count += int(len(data) / 3)
 
         else:
-            self.buffers[buffer_type] = gl.GLuint(0)
-            gl.glGenTextures(1, self.buffers[buffer_type])
+            self.buffers["texture"] = gl.GLuint(0)
+            gl.glGenTextures(1, self.buffers["texture"])
             gl.glBindTexture(data.target, data.id)
 
             gl.glTexParameterf(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
@@ -195,6 +206,14 @@ class VBO:
 
             gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGB, texture.width, texture.height, 0, gl.GL_RGB, gl.GL_UNSIGNED_BYTE,
                             texture_data)
+
+    def delete(self):
+        for buffer in self.buffers:
+            if self.buffers[buffer] is not None:
+                if buffer != 'texture':
+                    gl.glDeleteBuffers(1, self.buffers[buffer])
+                else:
+                    gl.glDeleteTextures(1, self.buffers['texture'])
 
     def vertex(self):
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.buffers["vertex"])
@@ -242,7 +261,7 @@ class Camera(object):
     far = 8192
     fov = 90
 
-    width, depth = 0.2, 0.2
+    width, depth = 0.5, 0.5
 
     vx, vy, vz = 0, 0, 0
     velocity = (0, 0, 0)
@@ -384,9 +403,7 @@ class Camera(object):
             if button == 1:
                 chunks[hit[0]].remove_block(hit[1])
             elif button == 4 and len(hit) == 3:
-                if sounds.get(self.holding_block) is not None:
-                    play_sound(random.choice(sounds[self.holding_block]), get_world_pos(hit[2][0], hit[2][1]))
-
+                play_sound(self.holding_block, get_world_pos(*hit[2]))
                 chunks[hit[2][0]].create_block(hit[2][1], new=self.holding_block)
 
     def mouse_drag(self, x, y, dx, dy, buttons, modifers):
@@ -586,7 +603,7 @@ class Chunk:
                 min_density = 1
                 min_density_block = None
 
-                for chunk, neighbor in get_neighbors(new_pos):
+                for chunk, neighbor in get_neighbors(new_pos, local_chunk=(self.cx, self.cz)):
                     if chunk == (self.cx, self.cz):
                         if neighbor not in added_blocks and 0 <= neighbor[1] < chunk_height:
                             block_density = chunk_density.item(neighbor)
@@ -628,8 +645,7 @@ class Chunk:
         self.is_meshed = True
 
     def remove_block(self, tile):
-        if sounds.get(self.block_map.item(tile)) is not None:
-            play_sound(random.choice(sounds[self.block_map.item(tile)]), get_world_pos((self.cx, self.cz), tile))
+        play_sound(self.block_map.item(tile), get_world_pos((self.cx, self.cz), tile))
 
         self.blocks.remove(tile)
         self.block_map.itemset(tile, 0)
@@ -687,7 +703,7 @@ class Chunk:
         return True
 
 
-def get_neighbors(pos, get_faces=False):
+def get_neighbors(pos, get_faces=False, local_chunk=False):
     x, y, z = pos
 
     neighbors = [
@@ -704,8 +720,13 @@ def get_neighbors(pos, get_faces=False):
         if get_faces:
             tile_neighbors.append(1 if chunks[chunk].block_map.item(tile) > 0 else 0)
         else:
-            if chunks[chunk].block_map.item(tile) > 0:
-                tile_neighbors.append((chunk, tile))
+            if local_chunk:
+                if chunk == local_chunk:
+                    if chunks[chunk].block_map.item(tile) > 0:
+                        tile_neighbors.append((chunk, tile))
+            else:
+                if chunks[chunk].block_map.item(tile) > 0:
+                    tile_neighbors.append((chunk, tile))
 
     return tile_neighbors
 
@@ -739,25 +760,24 @@ def random_chunk_pos(height=False):
     return random.randrange(chunk_size), random.randrange(height if height else height_offset), random.randrange(chunk_size)
 
 
-def play_sound(file, pos):
-    sound = LoadSound(file)
+def play_sound(block_id, pos):
+    block_type = block_sounds.get(block_id)
+
+    if block_type is None:
+        return
+
     player = SoundPlayer()
 
     player.position = pos
-    player.loop = False
-    player.volume = 0.5
-    player.rolloff = 1
+    player.volume = 0.1
 
+    sound = LoadSound(random.choice(sounds[block_type]))
     player.add(sound)
+    sound.delete()
+
     player.play()
 
-    threading.Timer(sound.duration, clean_up_sound, [sound, player]).start()
-
-
-def clean_up_sound(sound, player):
-    player.stop()
-    player.delete()
-    sound.delete()
+    threading.Timer(sound.duration, player.stop).start()
 
 
 def add_face(pos, face, texture_name, verts, norms, texts, scale=(1.0, 1.0, 1.0)):
@@ -813,15 +833,15 @@ def render_light(pos, attenuation=0):
     gl.glEnable(gl.GL_LIGHT0)
 
 
-def check_draw_distance(chunk):
+def check_draw_distance(center_chunk):
     active_chunks.clear()
 
     new_chunks = []
 
-    for cx in range(chunk[0] - render_distance, chunk[0] + render_distance + 1):
-        for cz in range(chunk[1] - render_distance, chunk[1] + render_distance + 1):
+    for cx in range(center_chunk[0] - render_distance, center_chunk[0] + render_distance + 1):
+        for cz in range(center_chunk[1] - render_distance, center_chunk[1] + render_distance + 1):
             pos = (cx, cz)
-            dist = (chunk[0] - cx) ** 2 + (chunk[1] - cz) ** 2
+            dist = (center_chunk[0] - cx) ** 2 + (center_chunk[1] - cz) ** 2
 
             if dist <= render_distance ** 2:
                 if pos not in meshing_list:
@@ -835,13 +855,21 @@ def check_draw_distance(chunk):
 
                 active_chunks.add(pos)
 
+    for pos in chunks.copy():
+        dist = (center_chunk[0] - pos[0]) ** 2 + (center_chunk[1] - pos[1]) ** 2
+
+        if dist > render_distance ** 2 + 10:
+            if chunks[pos].is_meshed:
+                chunks[pos].vbo.delete()
+                chunks.pop(pos)
+
     if len(new_chunks) > 0:
         meshing_list.extend([c for c, d in sorted(new_chunks, key=lambda x: x[1])])
 
 
 class CameraWindow(pyglet.window.Window):
     def __init__(self):
-        super(CameraWindow, self).__init__(resizable=True, vsync=False)
+        super(CameraWindow, self).__init__(resizable=True, vsync=True)
         self.maximize()
         self.set_fullscreen()
 
