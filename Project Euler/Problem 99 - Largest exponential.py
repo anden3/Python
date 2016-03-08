@@ -1,5 +1,5 @@
-from time import time
 from math import log
+from time import time
 
 
 def get_log(line):
@@ -12,6 +12,7 @@ t1 = time()
 file = open("base_exp.txt")
 biggest_num = 0
 current_line = 0
+maxline = None
 
 for l in file.readlines():
     current_line += 1

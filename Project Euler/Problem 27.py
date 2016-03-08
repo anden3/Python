@@ -32,9 +32,9 @@ def quad_primes(a, b):
 
 t1 = clock()
 
-for x in range(-1000, 1000):
-    for y in range(-1000, 1000):
-        quad_primes(x, y)
+for px in range(-1000, 1000):
+    for py in range(-1000, 1000):
+        quad_primes(px, py)
 
 t2 = clock()
 

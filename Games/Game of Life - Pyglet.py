@@ -1,6 +1,7 @@
 import pickle
 import sys
 from itertools import product
+from math import floor
 from random import random
 from statistics import median
 from time import perf_counter
@@ -11,8 +12,6 @@ import pyperclip
 import requests
 from pyglet.gl import *
 from pyglet.window import key
-
-from math import floor
 
 window = pyglet.window.Window(vsync=False, style=pyglet.window.Window.WINDOW_STYLE_TOOL)
 
@@ -451,6 +450,7 @@ def on_key_press(symbol, modifiers):
             load_external(path_string)
 
 
+# noinspection PyProtectedMember
 @window.event
 def on_key_release(symbol, modifers):
     if symbol == key.Q:
@@ -640,6 +640,7 @@ def draw_board():
     else:
         vertices = get_vertices()
 
+        # noinspection PyCallingNonCallable
         vertices_gl = (GLfloat * len(vertices))(*vertices)
 
         glVertexPointer(2, GL_INT, 0, vertices_gl)
