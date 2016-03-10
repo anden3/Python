@@ -1,9 +1,7 @@
-import io
 import math
 import os
 import random
 import threading
-import zipfile
 
 import noise
 import numpy
@@ -55,7 +53,9 @@ block_sounds = {
     1: 'snow',
     2: 'dirt', 8: 'dirt',
     3: 'sand',
-    5: 'stone', 6: 'stone', 7: 'stone'
+    4: 'cloth',
+    5: 'stone', 6: 'stone', 7: 'stone',
+    9: 'wood'
 }
 
 
@@ -63,7 +63,7 @@ def init():
     config_time(silent=True)
 
     init_gl()
-    init_textures()
+    init_textures(use_zip=False)
     init_sounds()
     init_terrain()
 
@@ -91,12 +91,19 @@ def init_gl():
     gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_REPEAT)
 
 
-def init_textures():
+def init_textures(use_zip=True):
     global texture_pos, texture, texture_data
 
-    image_archive = zipfile.ZipFile('images.zip')
-    images = [pyglet.image.load(file, file=io.BytesIO(image_archive.read(file))).get_image_data() for file in image_archive.namelist()]
-    image_archive.close()
+    if use_zip:
+        import zipfile
+        import io
+
+        image_archive = zipfile.ZipFile('images.zip')
+        images = [pyglet.image.load(file, file=io.BytesIO(image_archive.read(file))).get_image_data() for file in image_archive.namelist()]
+        image_archive.close()
+    else:
+        images = [pyglet.image.load('images/' + image).get_image_data()
+                  for image in sorted([file for file in os.listdir('images') if file.endswith('.png')], key=lambda x: int(x[:-4]))]
 
     area = len(images) * 256
     area_root = math.sqrt(area)
@@ -556,7 +563,7 @@ class Chunk:
         self.offsets = numpy.zeros((chunk_size, chunk_height + height_offset, chunk_size), dtype=numpy.uint32)
 
         self.is_meshed = False
-        self.generated_ores = False
+        self.generated_features = False
 
     def generate(self):
         for sx in range(chunk_size):
@@ -617,6 +624,45 @@ class Chunk:
                     self.block_map.itemset(min_density_block, 6)
                     new_pos = min_density_block
 
+    def generate_tree(self, pos, data):
+        x, y, z = get_world_pos((self.cx, self.cz), pos)
+        cx, cy, cz = pos
+
+        if self.block_map[cx, cy:cy + 8, cz].sum() != 0:
+            return
+
+        for sy in range(1, 7):
+            self.block_map.itemset((cx, cy + sy, cz), 9)
+
+            if sy <= 3:
+                self.blocks.add((cx, cy + sy, cz))
+
+        leaves = []
+
+        for sx in range(x - 2, x + 3):
+            for sz in range(z - 2, z + 3):
+                for sy in range(y + 4, y + 6):
+                    if sx != x or sz != z:
+                        if not x - 2 < sx < x + 2 or not z - 2 < sz < z + 2:
+                            leaves.append((sx, sy, sz))
+                        else:
+                            chunk, tile = get_chunk_pos((sx, sy, sz))
+                            chunks[chunk].block_map.itemset(tile, 10)
+
+        for sy in range(y + 6, y + 8):
+            for sx in range(x - 1, x + 2):
+                for sz in range(z - 1, z + 2):
+                    if sy == y + 6:
+                        leaves.append((sx, sy, sz))
+                    elif sx == x or sz == z:
+                        leaves.append((sx, sy, sz))
+
+        for pos in leaves:
+            chunk, tile = get_chunk_pos(pos)
+            chunks[chunk].block_map.itemset(tile, 10)
+            chunks[chunk].blocks.add(tile)
+            chunks[chunk].add_block(tile, data)
+
     def mesh(self):
         if not self.is_meshed:
             for gx in [-1, 0, 1]:
@@ -627,14 +673,19 @@ class Chunk:
                         chunks[chunk_pos] = Chunk(chunk_pos)
                         chunks[chunk_pos].generate()
 
-        if not self.generated_ores:
-            self.generated_ores = True
-            self.generate_ores()
-
         self.vbo.data("texture", texture, 0)
 
         data = ([], [], [])
         data_names = ["vertex", "normal", "texture_coords"]
+
+        if not self.generated_features:
+            self.generated_features = True
+            self.generate_ores()
+
+            for sx in range(chunk_size):
+                for sz in range(chunk_size):
+                    if random.random() < 0.005:
+                        self.generate_tree((sx, 100, sz), data)
 
         for pos in self.blocks.copy():
             self.add_block(pos, data)
@@ -681,10 +732,8 @@ class Chunk:
         data = ([], [], [])
 
         if self.add_block(tile, data):
-            offset = self.offsets.item(tile)
-
             for i, data_list in enumerate(data):
-                self.vbo.data(data_names[i], data_list, offset)
+                self.vbo.data(data_names[i], data_list, self.offsets.item(tile))
 
     def add_block(self, tile, data):
         x, y, z = get_world_pos((self.cx, self.cz), tile)
@@ -745,10 +794,6 @@ def get_chunk_pos(pos):
 
 def get_world_pos(chunk, tile):
     return chunk[0] * chunk_size + tile[0], tile[1], chunk[1] * chunk_size + tile[2]
-
-
-def clamp(values):
-    return tuple([(x - min(values)) / (max(values) - min(values)) for x in values])
 
 
 def normalize(vector):
