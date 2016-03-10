@@ -63,7 +63,7 @@ def init():
     config_time(silent=True)
 
     init_gl()
-    init_textures(use_zip=False)
+    init_textures()
     init_sounds()
     init_terrain()
 
@@ -91,19 +91,11 @@ def init_gl():
     gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_REPEAT)
 
 
-def init_textures(use_zip=True):
+def init_textures():
     global texture_pos, texture, texture_data
 
-    if use_zip:
-        import zipfile
-        import io
-
-        image_archive = zipfile.ZipFile('images.zip')
-        images = [pyglet.image.load(file, file=io.BytesIO(image_archive.read(file))).get_image_data() for file in image_archive.namelist()]
-        image_archive.close()
-    else:
-        images = [pyglet.image.load('images/' + image).get_image_data()
-                  for image in sorted([file for file in os.listdir('images') if file.endswith('.png')], key=lambda x: int(x[:-4]))]
+    images = [pyglet.image.load('images/' + image).get_image_data()
+              for image in sorted([file for file in os.listdir('images') if file.endswith('.png')], key=lambda x: int(x[:-4]))]
 
     area = len(images) * 256
     area_root = math.sqrt(area)
@@ -292,6 +284,7 @@ class Camera(object):
     holding_block = 1
 
     ui = VBO(size=1000)
+    outline = VBO(size=100)
 
     def view(self, width, height):
         self.w, self.h = width, height
@@ -587,7 +580,7 @@ class Chunk:
                 elif height < 82:
                     block_id = 4
 
-                for y in range(height - 1, height + 1):
+                for y in range(height - 2, height + 1):
                     self.blocks.add((sx, y, sz))
 
                 if block_id == 2:
@@ -624,38 +617,35 @@ class Chunk:
                     self.block_map.itemset(min_density_block, 6)
                     new_pos = min_density_block
 
-    def generate_tree(self, pos, data):
-        x, y, z = get_world_pos((self.cx, self.cz), pos)
-        cx, cy, cz = pos
+    def generate_tree(self, x, z, data):
+        pos = get_world_pos((self.cx, self.cz), (x, 0, z))
+        y = get_height(pos[0], pos[2])
 
-        if self.block_map[cx, cy:cy + 8, cz].sum() != 0:
+        if self.block_map[x, y, z] != 2 or self.block_map[x, y + 1:y + 8, z].sum() != 0:
             return
 
         for sy in range(1, 7):
-            self.block_map.itemset((cx, cy + sy, cz), 9)
+            self.block_map.itemset((x, y + sy, z), 9)
 
             if sy <= 3:
-                self.blocks.add((cx, cy + sy, cz))
+                self.blocks.add((x, y + sy, z))
 
-        leaves = []
+        leaves = [(sx, sy, sz) for sz in range(pos[2] - 1, pos[2] + 2)
+                  for sx in range(pos[0] - 1, pos[0] + 2)
+                  for sy in range(y + 6, y + 8)
+                  if sy == y + 6 or (sx == pos[0] or sz == pos[2])]
 
-        for sx in range(x - 2, x + 3):
-            for sz in range(z - 2, z + 3):
+        for sx in range(pos[0] - 2, pos[0] + 3):
+            for sz in range(pos[2] - 2, pos[2] + 3):
                 for sy in range(y + 4, y + 6):
-                    if sx != x or sz != z:
-                        if not x - 2 < sx < x + 2 or not z - 2 < sz < z + 2:
+                    if sx != pos[0] or sz != pos[2]:
+                        if sy == y + 4:
+                            leaves.append((sx, sy, sz))
+                        elif not pos[0] - 2 < sx < pos[0] + 2 or not pos[2] - 2 < sz < pos[2] + 2:
                             leaves.append((sx, sy, sz))
                         else:
                             chunk, tile = get_chunk_pos((sx, sy, sz))
                             chunks[chunk].block_map.itemset(tile, 10)
-
-        for sy in range(y + 6, y + 8):
-            for sx in range(x - 1, x + 2):
-                for sz in range(z - 1, z + 2):
-                    if sy == y + 6:
-                        leaves.append((sx, sy, sz))
-                    elif sx == x or sz == z:
-                        leaves.append((sx, sy, sz))
 
         for pos in leaves:
             chunk, tile = get_chunk_pos(pos)
@@ -685,7 +675,7 @@ class Chunk:
             for sx in range(chunk_size):
                 for sz in range(chunk_size):
                     if random.random() < 0.005:
-                        self.generate_tree((sx, 100, sz), data)
+                        self.generate_tree(sx, sz, data)
 
         for pos in self.blocks.copy():
             self.add_block(pos, data)
@@ -752,6 +742,24 @@ class Chunk:
         return True
 
 
+def draw_outline(chunk, tile):
+    offset = chunks[chunk].offsets.item(tile)
+    faces = get_neighbors(get_world_pos(chunk, tile), get_faces=True)
+
+    texture_positions = texture_pos[8]
+
+    tex_coords = []
+
+    for face in faces:
+        if face == 0:
+            for tx, ty, tz in [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]:
+                tex_coords.append(texture_positions[tx][0])
+                tex_coords.append(texture_positions[ty][1])
+                tex_coords.append(0)
+
+    chunks[chunk].vbo.data('texture_coords', tex_coords, offset)
+
+
 def get_neighbors(pos, get_faces=False, local_chunk=False):
     x, y, z = pos
 
@@ -778,6 +786,10 @@ def get_neighbors(pos, get_faces=False, local_chunk=False):
                     tile_neighbors.append((chunk, tile))
 
     return tile_neighbors
+
+
+def get_height(x, z):
+    return round((noise.snoise3(x / zoom, z / zoom, seed, octaves=3) + 1) / 2 * chunk_height) + height_offset
 
 
 # noinspection PyCallingNonCallable
@@ -953,6 +965,23 @@ class CameraWindow(pyglet.window.Window):
 
         if len(meshing_list) > 0:
             chunks[meshing_list.pop(0)].mesh()
+
+        gl.glClearStencil(0)
+        gl.glClear(gl.GL_STENCIL_BUFFER_BIT)
+
+        gl.glEnable(gl.GL_STENCIL_TEST)
+
+        gl.glStencilFunc(gl.GL_NOTEQUAL, 1, -1)
+        gl.glStencilOp(gl.GL_KEEP, gl.GL_KEEP, gl.GL_REPLACE)
+
+        gl.glLineWidth(5)
+        gl.glPolygonMode(gl.GL_FRONT, gl.GL_LINE)
+
+        for chunk in active_chunks:
+            chunks[chunk].vbo.draw()
+
+        gl.glStencilFunc(gl.GL_ALWAYS, 1, -1)
+        gl.glStencilOp(gl.GL_KEEP, gl.GL_KEEP, gl.GL_REPLACE)
 
         for chunk in active_chunks:
             chunks[chunk].vbo.draw()
