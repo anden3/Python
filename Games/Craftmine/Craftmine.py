@@ -1,5 +1,6 @@
 import math
 import os
+import pickle
 import random
 import threading
 
@@ -17,15 +18,16 @@ time = Time()
 chunks = {}
 active_chunks = set()
 meshing_list = []
+deleted_blocks = {}
+added_blocks = {}
 
 chunk_size = 16
 chunk_height = 64
 height_offset = 64
-render_distance = 7
+render_distance = 3
+zoom = 100
 
 window_width, window_height = 0, 0
-
-zoom = 100
 
 seed = random.uniform(-1000, 1000)
 
@@ -284,7 +286,6 @@ class Camera(object):
     holding_block = 1
 
     ui = VBO(size=1000)
-    outline = VBO(size=100)
 
     def view(self, width, height):
         self.w, self.h = width, height
@@ -388,6 +389,12 @@ class Camera(object):
         elif symbol == key._4:
             self.holding_block = 4
             self.update_ui()
+
+        elif symbol == key.N:
+            save_game()
+
+        elif symbol == key.L:
+            load_game()
 
         elif symbol == key.ESCAPE:
             time.get(get_type="all")
@@ -558,6 +565,15 @@ class Chunk:
         self.is_meshed = False
         self.generated_features = False
 
+        self.add_blocks = None
+        self.remove_blocks = None
+
+        if (self.cx, self.cz) not in added_blocks:
+            added_blocks[(self.cx, self.cz)] = {}
+
+        if (self.cx, self.cz) not in deleted_blocks:
+            deleted_blocks[(self.cx, self.cz)] = {}
+
     def generate(self):
         for sx in range(chunk_size):
             x = sx + self.cx * chunk_size
@@ -592,12 +608,22 @@ class Chunk:
                 self.block_map[sx, 1:height - 4, sz] = 5
                 self.block_map[sx, 0, sz] = 7
 
+        if self.add_blocks is not None:
+            for block, value in self.add_blocks.items():
+                self.block_map.itemset(block, value)
+                self.blocks.add(block)
+
+        if self.remove_blocks is not None:
+            for block in self.remove_blocks:
+                self.block_map.itemset(block, 0)
+                self.blocks.discard(block)
+
     def generate_ores(self):
         deposit_locations = [random_chunk_pos() for _ in range(20)]
 
         for pos in deposit_locations:
             new_pos = pos
-            added_blocks = {new_pos}
+            new_blocks = {new_pos}
 
             for _ in range(6):
                 min_density = 1
@@ -613,7 +639,7 @@ class Chunk:
                                 min_density_block = neighbor
 
                 if min_density_block is not None:
-                    added_blocks.add(min_density_block)
+                    new_blocks.add(min_density_block)
                     self.block_map.itemset(min_density_block, 6)
                     new_pos = min_density_block
 
@@ -686,11 +712,19 @@ class Chunk:
         self.is_meshed = True
 
     def remove_block(self, tile):
-        play_sound(self.block_map.item(tile), get_world_pos((self.cx, self.cz), tile))
+        chunk = (self.cx, self.cz)
+
+        block_type = self.block_map.item(tile)
+        play_sound(block_type, get_world_pos(chunk, tile))
 
         self.blocks.remove(tile)
         self.block_map.itemset(tile, 0)
         self.offsets.itemset(tile, 0)
+
+        if tile in added_blocks[chunk]:
+            added_blocks[chunk].pop(tile)
+        else:
+            deleted_blocks[chunk][tile] = block_type
 
         self.vbo = VBO()
         self.offset = 0
@@ -719,6 +753,16 @@ class Chunk:
             self.blocks.add(tile)
             self.block_map.itemset(tile, new)
 
+            chunk = (self.cx, self.cz)
+
+            if tile in deleted_blocks[chunk]:
+                if deleted_blocks[chunk][tile] != new:
+                    added_blocks[chunk][tile] = new
+
+                deleted_blocks[chunk].pop(tile)
+            else:
+                added_blocks[chunk][tile] = new
+
         data = ([], [], [])
 
         if self.add_block(tile, data):
@@ -727,6 +771,7 @@ class Chunk:
 
     def add_block(self, tile, data):
         x, y, z = get_world_pos((self.cx, self.cz), tile)
+
         neighbors = get_neighbors((x, y, z), get_faces=True)
 
         if sum(neighbors) == 6:
@@ -786,6 +831,38 @@ def get_neighbors(pos, get_faces=False, local_chunk=False):
                     tile_neighbors.append((chunk, tile))
 
     return tile_neighbors
+
+
+def save_game():
+    pickle.dump((seed, added_blocks, deleted_blocks), open('saves/save.txt', 'wb'))
+
+
+def load_game():
+    global seed, added_blocks, deleted_blocks
+    seed, added_blocks, deleted_blocks = pickle.load(open('saves/save.txt', 'rb'))
+
+    global chunks, active_chunks, meshing_list
+    chunks = {}
+    active_chunks = set()
+    meshing_list = []
+
+    chunk_list = set()
+
+    for chunk in added_blocks:
+        chunks[chunk] = Chunk(chunk)
+        chunks[chunk].add_blocks = added_blocks[chunk]
+        chunk_list.add(chunk)
+
+    for chunk in deleted_blocks:
+        if chunk not in chunks:
+            chunks[chunk] = Chunk(chunk)
+            chunks[chunk].remove_blocks = deleted_blocks[chunk]
+            chunk_list.add(chunk)
+        else:
+            chunks[chunk].remove_blocks = deleted_blocks[chunk]
+
+    for chunk in chunk_list:
+        chunks[chunk].generate()
 
 
 def get_height(x, z):
@@ -965,23 +1042,6 @@ class CameraWindow(pyglet.window.Window):
 
         if len(meshing_list) > 0:
             chunks[meshing_list.pop(0)].mesh()
-
-        gl.glClearStencil(0)
-        gl.glClear(gl.GL_STENCIL_BUFFER_BIT)
-
-        gl.glEnable(gl.GL_STENCIL_TEST)
-
-        gl.glStencilFunc(gl.GL_NOTEQUAL, 1, -1)
-        gl.glStencilOp(gl.GL_KEEP, gl.GL_KEEP, gl.GL_REPLACE)
-
-        gl.glLineWidth(5)
-        gl.glPolygonMode(gl.GL_FRONT, gl.GL_LINE)
-
-        for chunk in active_chunks:
-            chunks[chunk].vbo.draw()
-
-        gl.glStencilFunc(gl.GL_ALWAYS, 1, -1)
-        gl.glStencilOp(gl.GL_KEEP, gl.GL_KEEP, gl.GL_REPLACE)
 
         for chunk in active_chunks:
             chunks[chunk].vbo.draw()
