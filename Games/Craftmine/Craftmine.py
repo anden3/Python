@@ -24,7 +24,7 @@ added_blocks = {}
 chunk_size = 16
 chunk_height = 64
 height_offset = 64
-render_distance = 3
+render_distance = 5
 zoom = 100
 
 window_width, window_height = 0, 0
@@ -629,7 +629,7 @@ class Chunk:
                 min_density = 1
                 min_density_block = None
 
-                for chunk, neighbor in get_neighbors(new_pos, local_chunk=(self.cx, self.cz)):
+                for chunk, neighbor in get_neighbors(new_pos, local_chunk=(self.cx, self.cz), world_pos=True):
                     if chunk == (self.cx, self.cz):
                         if neighbor not in added_blocks and 0 <= neighbor[1] < chunk_height:
                             block_density = chunk_density.item(neighbor)
@@ -703,8 +703,10 @@ class Chunk:
                     if random.random() < 0.005:
                         self.generate_tree(sx, sz, data)
 
+        time.add('Time Per Chunk')
         for pos in self.blocks.copy():
             self.add_block(pos, data)
+        time.add('Time Per Chunk')
 
         for i, data_list in enumerate(data):
             self.vbo.data(data_names[i], data_list, 0)
@@ -770,20 +772,27 @@ class Chunk:
                 self.vbo.data(data_names[i], data_list, self.offsets.item(tile))
 
     def add_block(self, tile, data):
-        x, y, z = get_world_pos((self.cx, self.cz), tile)
+        time.add('Total')
 
-        neighbors = get_neighbors((x, y, z), get_faces=True)
+        pos = get_world_pos((self.cx, self.cz), tile)
+
+        time.add('Neighbors')
+        neighbors = get_neighbors(((self.cx, self.cz), tile), get_faces=True)
+        time.add('Neighbors')
 
         if sum(neighbors) == 6:
             self.blocks.remove(tile)
+            time.add('Total')
             return False
 
-        for i, face in enumerate(neighbors):
-            if face == 0:
-                add_face((x, y, z), i, self.block_map.item(tile), *data)
+        time.add('Add Block')
+        add_block(pos, neighbors, self.block_map.item(tile), *data)
+        time.add('Add Block')
 
         self.offsets.itemset(tile, self.offset)
         self.offset += (6 - sum(neighbors)) * 4
+
+        time.add('Total')
         return True
 
 
@@ -805,8 +814,11 @@ def draw_outline(chunk, tile):
     chunks[chunk].vbo.data('texture_coords', tex_coords, offset)
 
 
-def get_neighbors(pos, get_faces=False, local_chunk=False):
-    x, y, z = pos
+def get_neighbors(pos, world_pos=False, get_faces=False, local_chunk=False):
+    if world_pos:
+        x, y, z = pos
+    else:
+        x, y, z = pos[1]
 
     neighbors = [
         (x - 1, y, z), (x + 1, y, z),
@@ -817,18 +829,39 @@ def get_neighbors(pos, get_faces=False, local_chunk=False):
     tile_neighbors = []
 
     for neighbor in neighbors:
-        chunk, tile = get_chunk_pos(neighbor)
+        if world_pos:
+            c, t = get_chunk_pos(pos)
+
+        else:
+            cx, cz = pos[0]
+            sx, sy, sz = neighbor
+
+            if sx > chunk_size - 1:
+                sx -= 16
+                cx += 1
+            elif sx < 0:
+                sx += 16
+                cx -= 1
+
+            if sz > chunk_size - 1:
+                sz -= 16
+                cz += 1
+            elif sz < 0:
+                sz += 16
+                cz -= 1
+
+            c, t = (cx, cz), (sx, sy, sz)
 
         if get_faces:
-            tile_neighbors.append(1 if chunks[chunk].block_map.item(tile) > 0 else 0)
+            tile_neighbors.append(1 if chunks[c].block_map.item(t) > 0 else 0)
         else:
             if local_chunk:
-                if chunk == local_chunk:
-                    if chunks[chunk].block_map.item(tile) > 0:
-                        tile_neighbors.append((chunk, tile))
+                if c == local_chunk:
+                    if chunks[c].block_map.item(t) > 0:
+                        tile_neighbors.append((c, t))
             else:
-                if chunks[chunk].block_map.item(tile) > 0:
-                    tile_neighbors.append((chunk, tile))
+                if chunks[c].block_map.item(t) > 0:
+                    tile_neighbors.append((c, t))
 
     return tile_neighbors
 
@@ -885,11 +918,6 @@ def get_world_pos(chunk, tile):
     return chunk[0] * chunk_size + tile[0], tile[1], chunk[1] * chunk_size + tile[2]
 
 
-def normalize(vector):
-    vector_length = math.sqrt(sum([v ** 2 for v in vector]))
-    return tuple([v / vector_length for v in vector])
-
-
 def random_chunk_pos(height=False):
     return random.randrange(chunk_size), random.randrange(height if height else height_offset), random.randrange(chunk_size)
 
@@ -914,23 +942,22 @@ def play_sound(block_id, pos):
     threading.Timer(sound.duration, player.stop).start()
 
 
-def add_face(pos, face, texture_name, verts, norms, texts, scale=(1.0, 1.0, 1.0)):
+def add_block(pos, faces, block_id, verts, norms, texts):
     x, y, z = pos
-    w, h, d = scale
-    texture_positions = texture_pos[texture_name]
+    texture_positions = texture_pos[block_id]
 
     vertices = []
     normals = []
     tex_coords = []
 
-    for tx, ty, tz in [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]:
-        tex_coords.append(texture_positions[tx][0] * w)
-        tex_coords.append(texture_positions[ty][1] * h)
-        tex_coords.append(0)
+    for i, face in enumerate(faces):
+        if face == 0:
+            for tx, ty, tz in [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]:
+                tex_coords.extend([texture_positions[tx][0], texture_positions[ty][1], 0])
 
-    for i, (sx, sy, sz) in enumerate(cube_signs[face]):
-        vertices.extend([x + (w * sx), y + (h * sy), z + (d * sz)])
-        normals.extend([*cube_normals[face]])
+            for sx, sy, sz in cube_signs[i]:
+                vertices.extend([x + sx, y + sy, z + sz])
+                normals.extend([*cube_normals[i]])
 
     verts.extend(vertices)
     norms.extend(normals)
